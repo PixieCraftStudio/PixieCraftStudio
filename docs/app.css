@@ -78,12 +78,13 @@ body.guest { --g-ink: #1f4d2c; --g-rose: #9a5868; --g-pink: #d38da9; --g-pink-li
 .g-foot { position: relative; z-index: 1; text-align: center; margin: 16px 0 0; font-family: var(--serif); font-size: 18px; color: rgba(255, 252, 245, .78); text-shadow: 0 1px 4px rgba(40, 25, 15, .25); }
 
 /* reservation: full page */
-.g-page-res { display: block; padding: 0 0 36px; background: var(--g-paper); }
-.g-page-res .g-preview-banner { margin: 12px auto; }
-.g-hero { position: relative; height: clamp(220px, 30vw, 410px); background: #cfc2ad center / cover no-repeat; overflow: hidden; }
+.g-page-res { display: block; padding: 52px 16px 36px; }
+.g-page-res .g-preview-banner { margin: 0 auto 14px; }
+/* The photo (or video) stays still behind the card while guests scroll. */
+.g-hero { position: fixed; inset: 0; z-index: 0; background: #cfc2ad center / cover no-repeat; overflow: hidden; }
+.g-hero.is-soft { inset: -16px; filter: blur(4px) saturate(.95); }
 .g-hero video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.g-hero .g-glow { position: absolute; left: 50%; top: 52px; margin: 0 0 0 -6px; z-index: 1; }
-.g-card-res { max-width: 410px; background: none; box-shadow: none; border-radius: 0; padding: 30px 16px 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.g-card-res { max-width: 440px; padding: 22px 26px 32px; }
 .g-greeting { margin: 0 auto; max-width: 20em; font-size: calc(15px * var(--g-fs-text, 1)); line-height: 1.35; color: var(--g-rose); }
 .g-family { margin: 10px 0 0; font-family: var(--g-script); font-weight: 400; font-size: calc(54px * var(--g-fs-names, 1)); line-height: 1.15; color: var(--g-ink); text-shadow: 0 2px 3px rgba(31, 40, 25, .22); }
 .g-seats { margin: 6px 0 0; display: flex; flex-direction: column; align-items: center; }
@@ -121,7 +122,6 @@ body.guest { --g-ink: #1f4d2c; --g-rose: #9a5868; --g-pink: #d38da9; --g-pink-li
 .g-closed { margin: 18px 0 0; padding: 14px 18px; border-radius: 12px; background: var(--g-blush); text-align: left; font: 14px/1.45 var(--g-small); color: var(--g-rose-dark); }
 .g-closed .g-eyebrow { margin: 0 0 4px; font-weight: 700; font-size: 17px; color: var(--g-rose-dark); }
 .g-closed p { margin: 4px 0; }
-.g-page-res .g-foot { margin-top: 30px; color: var(--g-olive); opacity: .6; text-shadow: none; font-size: 16px; }
 
 body.guest[data-script="Pinyon Script"] .g-amp { font-family: 'Great Vibes', var(--g-script); }
 .g-glance-total, .g-thanks-total { font-family: var(--serif); font-style: normal; font-size: calc(15px * var(--g-fs-text, 1)); }
@@ -135,8 +135,8 @@ body.guest[data-script="Pinyon Script"] .g-amp { font-family: 'Great Vibes', var
 @media (max-width: 560px) {
   .g-page { padding: 44px 14px 18px; }
   .g-card { padding: 18px 22px 28px; border-radius: 26px; }
-  .g-page-res { padding: 0 0 28px; }
-  .g-card-res { padding: 24px 16px 0; border-radius: 0; }
+  .g-page-res { padding: 36px 12px 24px; }
+  .g-card-res { padding: 20px 18px 26px; border-radius: 24px; }
   .g-title { font-size: calc(29px * var(--g-fs-titles, 1)); }
   .g-couple { font-size: calc(52px * var(--g-fs-names, 1)); }
   .g-family { font-size: calc(46px * var(--g-fs-names, 1)); }
@@ -825,7 +825,6 @@ a.c-social:hover { background: #955a6a; }
 /* The card's color is drawn underneath so elements can sit behind the card, under the words, or in front. */
 .g-card { container-type: inline-size; background: none; }
 .g-card::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--g-card); pointer-events: none; }
-.g-card-res::before { background: none; }
 .g-decor { position: absolute; inset: 0; pointer-events: none; }
 .g-decor-behind { z-index: -2; }
 .g-decor-under { z-index: -1; }

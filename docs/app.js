@@ -645,7 +645,7 @@
     }
     if (method === 'POST' && path === '/api/board/setup') {
       if (accounts.length) return err(400, 'The studio sign-in is already set up.');
-      if (ctx.setupCode && String(body.setupCode || '').trim() !== ctx.setupCode) return err(403, 'That setup code is not right. It is shown where the website was started.');
+      if (ctx.setupCode && String(body.setupCode || '').trim() !== ctx.setupCode) return err(403, 'That setup code is not right. Please check it and try again.');
       const name = cleanText(body.name, 40);
       if (!name) return err(400, 'Please type your name.');
       if (String(body.password || '').length < 8) return err(400, 'Please choose a password with at least 8 characters.');
@@ -2019,9 +2019,10 @@ guest: function () {
           <p>The RSVP deadline (${esc(C.formatDeadline(s.deadline))}) has passed, so answers can no longer be sent or changed here.</p>
           <p>${rich('noticeContact')}</p></div>`;
       return `<div class="g-page g-page-res">
-        <div class="g-hero" data-region="hero" aria-hidden="true">${glow}</div>
+        <div class="g-hero" data-region="hero" aria-hidden="true"></div>
         ${banner()}
         <main class="g-card g-card-res">
+          ${glow}
           <header class="g-res-head">
             <p class="g-greeting">${rich('greeting', r)}</p>
             <h1 class="g-family">${names(r.family)}</h1>
@@ -2075,6 +2076,7 @@ guest: function () {
     if (!el || !th) return;
     const mine = ++heroToken;
     el.dataset.bg = th.background;
+    el.classList.toggle('is-soft', th.blur !== false);
     el.style.backgroundImage = th.background === 'garden' ? `url("${P.bg}")` : th.background === 'custom' && th.customBg ? `url("${th.customBg}")` : '';
     const old = el.querySelector('video');
     if (!th.video) { if (old) old.remove(); return; }
@@ -2596,7 +2598,7 @@ guest: function () {
         <p class="a-muted">This board is only for Pixie Craft Studio. Couples and guests never see it.</p>
         ${bundleNote()}
         <form data-form="setup" class="a-stack" novalidate>
-          ${au.needsSetupCode ? '<label class="a-field"><span>Setup code</span><input name="setupCode" inputmode="numeric" autocomplete="off" required><small>Shown in the window where the website was started.</small></label>' : ''}
+          ${au.needsSetupCode ? '<label class="a-field"><span>Setup code</span><input name="setupCode" inputmode="numeric" autocomplete="off" required><small>' + (P.pages ? 'The 6 numbers you saved as SETUP_CODE in Supabase.' : 'Shown in the window where the website was started.') + '</small></label>' : ''}
           <label class="a-field"><span>Your name</span><input name="name" autocomplete="username" required></label>
           <label class="a-field"><span>Password (at least 8 characters)</span><input name="password" type="password" autocomplete="new-password" required></label>
           ${B.error ? `<p class="a-error" role="alert">${esc(B.error)}</p>` : ''}
