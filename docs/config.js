@@ -1,6 +1,4 @@
-// Fill these in with your Supabase project's details (Supabase > Project Settings > API), then commit.
-// Both are safe to be public: the key only lets visitors call the website's API, never read the database directly.
 window.PIXIE_CONFIG = {
-  supabaseUrl: '',   // like https://abcdefghijklmnop.supabase.co
-  supabaseKey: '',   // the "anon public" or "publishable" key
+  supabaseUrl: 'https://ggyttelqifwhrazvystn.supabase.co',
+  supabaseKey: 'sb_publishable_ke1xITtTF_9PQJsStz3PVQ_IGQxuW4n',
 };
