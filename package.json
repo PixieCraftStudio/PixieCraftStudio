@@ -1,0 +1,12 @@
+{
+  "name": "pixie-rsvp",
+  "version": "3.1.0",
+  "description": "Pixie Craft Studio wedding RSVP website (GitHub Pages + Supabase)",
+  "private": true,
+  "scripts": {
+    "build": "node build-pages.js",
+    "preview": "node build-pages.js && node pages/preview.js",
+    "test": "node tests/pages-test.js"
+  },
+  "engines": { "node": ">=22" }
+}

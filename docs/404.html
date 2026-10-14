@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>RSVP</title>
+<script>
+(function () {
+  var p = location.pathname, m = p.match(/^(.*?)\/(w|r|couple|board)(\/.*)?$/);
+  if (m) location.replace(m[1] + '/#/' + m[2] + (m[3] || ''));
+  else document.write('<p style="font-family:sans-serif;text-align:center;margin-top:20vh">Page not found.</p>');
+})();
+</script></head><body></body></html>

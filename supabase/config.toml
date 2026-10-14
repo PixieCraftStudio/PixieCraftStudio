@@ -1,0 +1,5 @@
+project_id = "pixie-rsvp"
+
+# Lets the website call the API without a Supabase user account (it has its own studio and couple sign-ins).
+[functions.api]
+verify_jwt = false
