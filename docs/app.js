@@ -211,6 +211,24 @@
     'Libre Baskerville', 'Josefin Sans', 'Raleway', 'Quicksand', 'Nunito Sans', 'Montserrat'];
   const SCRIPT_FONTS = ['Great Vibes', 'Pinyon Script', 'Alex Brush', 'Allura', 'Parisienne', 'Tangerine', 'Italianno', 'Monsieur La Doulaise', 'Petit Formal Script',
     'Mrs Saint Delafield', 'Rouge Script', 'Imperial Script', 'Ballet', 'WindSong', 'Corinthia', 'Luxurious Script', 'Herr Von Muellerhoff', 'Dancing Script', 'Playfair Display'];
+  // Every font on offer, grouped the way the font lists show them. All are Google Fonts (most are in Canva's font list too), so they load on any website.
+  const FONT_GROUPS = {
+    'Script & calligraphy': ['Great Vibes', 'Pinyon Script', 'Italianno', 'Alex Brush', 'Allura', 'Parisienne', 'Tangerine', 'Monsieur La Doulaise', 'Petit Formal Script',
+      'Mrs Saint Delafield', 'Rouge Script', 'Imperial Script', 'Ballet', 'WindSong', 'Corinthia', 'Luxurious Script', 'Herr Von Muellerhoff', 'Dancing Script',
+      'Sacramento', 'Allison', 'Birthstone', 'Carattere', 'Ephesis', 'Fleur De Leah', 'Lavishly Yours', 'Meddon', 'Ms Madi', 'Qwigley', 'Rochester', 'Satisfy',
+      'Style Script', 'The Nautigal', 'Vujahday Script', 'Whisper', 'Arizonia', 'Euphoria Script', 'Love Light', 'Bilbo Swash Caps', 'Mea Culpa', 'Send Flowers',
+      'Lovers Quarrel', 'Hurricane', 'Water Brush', 'Yesteryear', 'Cookie', 'Grand Hotel', 'Kaushan Script', 'Clicker Script', 'League Script', 'Mr De Haviland',
+      'Mrs Sheppards', 'Niconne', 'Norican', 'Playball', 'Princess Sofia', 'Seaweed Script', 'La Belle Aurore'],
+    'Elegant serif & display': ['Bodoni Moda', 'Playfair Display', 'Playfair Display SC', 'Cormorant Garamond', 'Cormorant', 'Cormorant Infant', 'Cormorant SC', 'Cormorant Upright',
+      'Italiana', 'Gloock', 'Prata', 'Gilda Display', 'Marcellus', 'Forum', 'Cinzel', 'Cinzel Decorative', 'Libre Caslon Display', 'DM Serif Display', 'Della Respira',
+      'Bellefair', 'Lora', 'EB Garamond', 'Crimson Pro', 'Libre Baskerville', 'Libre Bodoni', 'Noto Serif Display', 'Abril Fatface', 'Yeseva One', 'Bona Nova', 'Fraunces',
+      'Instrument Serif', 'Young Serif', 'Antic Didone', 'Aboreto', 'Castoro', 'Cardo', 'Spectral', 'Old Standard TT', 'Sorts Mill Goudy', 'Linden Hill', 'Rosarivo',
+      'Ovo', 'Rufina', 'Gowun Batang', 'Mate', 'Lustria', 'Newsreader', 'Brygada 1918', 'Arapey', 'Alice', 'Junge', 'Fanwood Text', 'Federo', 'Rozha One', 'Kurale',
+      'Amiri', 'Lancelot', 'Petrona', 'Sedan'],
+    'Clean & modern': ['Montserrat', 'Poppins', 'Tenor Sans', 'Josefin Sans', 'Raleway', 'Quicksand', 'Nunito Sans', 'Poiret One', 'Jost', 'Lato', 'Lexend', 'Urbanist',
+      'Questrial', 'Comfortaa', 'Didact Gothic', 'Mulish', 'Work Sans', 'Outfit', 'Kumbh Sans', 'League Spartan', 'Montserrat Alternates', 'Inter', 'DM Sans', 'Manrope',
+      'Figtree', 'Karla', 'Gruppo', 'Julius Sans One', 'Antic', 'Nunito', 'Cabin'],
+  };
   // A font file the studio uploads (for example one they own from Canva Pro) can be used for any of the three.
   const CUSTOM_FONT = 'My uploaded font';
   const FONT_URL = /^data:(font\/(woff2?|ttf|otf)|application\/(font-woff|x-font-ttf|x-font-otf|octet-stream|vnd\.ms-opentype));base64,[A-Za-z0-9+/=]+$/;
@@ -242,7 +260,8 @@
     return { decor: out };
   }
   const inRange = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi;
-  const ALL_FONTS = () => [...HEADING_FONTS, ...BODY_FONTS, ...SCRIPT_FONTS, 'Montserrat', 'Poppins', 'Gloock'];
+  const ALL_FONT_LIST = [...new Set([...Object.values(FONT_GROUPS).flat(), ...HEADING_FONTS, ...BODY_FONTS, ...SCRIPT_FONTS])];
+  const ALL_FONTS = () => ALL_FONT_LIST;
   // Pictures and text boxes the studio places freely on a page (guest screens, couple's view, board).
   function cleanElements(list, customFontOk, max) {
     if (!Array.isArray(list) || list.length > max) return { error: `A page can hold up to ${max} elements.` };
@@ -351,9 +370,9 @@
       } else t.customFont = null;
     }
     const fontOk = (list, v) => list.includes(v) || (v === CUSTOM_FONT && !!t.customFont);
-    if (body.headingFont !== undefined) { if (!fontOk(HEADING_FONTS, body.headingFont)) return { error: 'Unknown heading font.' }; t.headingFont = body.headingFont; }
-    if (body.bodyFont !== undefined) { if (!fontOk(BODY_FONTS, body.bodyFont)) return { error: 'Unknown text font.' }; t.bodyFont = body.bodyFont; }
-    if (body.scriptFont !== undefined) { if (!fontOk(SCRIPT_FONTS, body.scriptFont)) return { error: 'Unknown names font.' }; t.scriptFont = body.scriptFont; }
+    if (body.headingFont !== undefined) { if (!fontOk(ALL_FONTS(), body.headingFont)) return { error: 'Unknown heading font.' }; t.headingFont = body.headingFont; }
+    if (body.bodyFont !== undefined) { if (!fontOk(ALL_FONTS(), body.bodyFont)) return { error: 'Unknown text font.' }; t.bodyFont = body.bodyFont; }
+    if (body.scriptFont !== undefined) { if (!fontOk(ALL_FONTS(), body.scriptFont)) return { error: 'Unknown names font.' }; t.scriptFont = body.scriptFont; }
     if (!t.customFont) for (const k of ['headingFont', 'bodyFont', 'scriptFont']) if (t[k] === CUSTOM_FONT) t[k] = defaultTheme()[k];
     if (body.headingItalic !== undefined) t.headingItalic = !!body.headingItalic;
     if (body.blur !== undefined) t.blur = !!body.blur;
@@ -616,7 +635,7 @@
         return ok({ couple: c.site.couple, site: c.site, slug: c.slug, closed: isClosed(c.site, now, tz), stats: stats(c), version: c.updatedAt,
           reservations: c.reservations.map(r => Object.assign(publicReservation(r), { id: r.id, addedBy: r.addedBy || 'studio', createdAt: r.createdAt || null })) });
       }
-      // Couples can add families themselves, and remove the ones they added until that family has answered.
+      // Couples can add families themselves, and remove the ones they added (even after that family answered).
       if (sub === '/reservations' && method === 'POST') {
         if (isClosed(c.site, now, tz)) return err(403, 'The RSVP deadline has passed. Please message Pixie Craft Studio to add guests.');
         if (c.reservations.filter(r => r.addedBy === 'couple').length >= 500) return err(400, 'That’s a lot of families! Please message Pixie Craft Studio to add more.');
@@ -631,7 +650,6 @@
         const r = c.reservations.find(x => x.id === m[1]);
         if (!r) return err(404, 'This family was already removed.');
         if (r.addedBy !== 'couple') return err(403, 'Only Pixie Craft Studio can remove this family.');
-        if (r.submittedAt) return err(403, 'This family already answered, so it can’t be removed here. Please message Pixie Craft Studio.');
         c.reservations = c.reservations.filter(x => x !== r); touch(db, c, 'couple');
         return ok({ ok: true }, { save: true });
       }
@@ -704,7 +722,7 @@
       }
       if (method === 'GET' && path === '/api/board/clients') {
         return ok({ me: who, version: db.version, clients: db.clients.map(c => clientSummary(c, now, tz)),
-          palettes: PALETTES, headingFonts: HEADING_FONTS, bodyFonts: BODY_FONTS, scriptFonts: SCRIPT_FONTS, customFont: CUSTOM_FONT, effects: EFFECTS, backgrounds: BACKGROUNDS });
+          palettes: PALETTES, fontGroups: FONT_GROUPS, headingFonts: HEADING_FONTS, bodyFonts: BODY_FONTS, scriptFonts: SCRIPT_FONTS, customFont: CUSTOM_FONT, effects: EFFECTS, backgrounds: BACKGROUNDS });
       }
       if (method === 'POST' && path === '/api/board/clients') {
         const couple = cleanText(body.couple, 80);
@@ -806,7 +824,7 @@
   }
 
   return {
-    DEFAULT_SITE, STATUSES, PALETTES, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
+    DEFAULT_SITE, STATUSES, PALETTES, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
     handle, stats, fill, isClosed, deadlineEnd, formatDeadline, formatWeddingDate, formatLong, formatPadded, validDate, normName,
   };
 });
@@ -936,7 +954,7 @@
     'Quicksand': 'wght@400;600', 'Libre Caslon Display': '', 'DM Serif Display': 'ital@0;1', 'Gloock': '', 'Prata': '', 'Gilda Display': '', 'Marcellus': '', 'Forum': '',
     'Della Respira': '', 'Bellefair': '', 'Italiana': '', 'Tenor Sans': '', 'Great Vibes': '', 'Parisienne': '', 'Pinyon Script': '', 'Alex Brush': '', 'Allura': '',
     'Tangerine': 'wght@400;700', 'Italianno': '', 'Monsieur La Doulaise': '', 'Petit Formal Script': '', 'Mrs Saint Delafield': '', 'Rouge Script': '', 'Imperial Script': '',
-    'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
+    'Poppins': 'wght@400;500;600;700', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
   };
   P.FONT_FAMILIES = Object.keys(AXES);
   // The studio's own uploaded font is registered under this name.
@@ -948,12 +966,28 @@
     new FontFace(CUSTOM_FAMILY, `url(${f.data})`).load().then(face => document.fonts.add(face)).catch(() => {});
   };
   P.fontFamily = n => n === CUSTOM ? CUSTOM_FAMILY : n;
+  const loadedFonts = new Set();
   P.loadFonts = function (names) {
-    const fams = [...new Set(names)].filter(n => n in AXES).map(n => 'family=' + n.replace(/ /g, '+') + (AXES[n] ? ':' + AXES[n] : ''));
-    if (!fams.length) return;
-    const href = 'https://fonts.googleapis.com/css2?' + fams.join('&') + '&display=swap';
-    if (document.querySelector(`link[href="${href}"]`)) return;
-    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; document.head.appendChild(l);
+    const core = window.PixieCore, known = n => n in AXES || !!(core && core.FONT_GROUPS && Object.values(core.FONT_GROUPS).some(g => g.includes(n)));
+    const fams = [...new Set(names)].filter(n => known(n) && !loadedFonts.has(n));
+    // A few fonts per request, so one font Google can't find never stops the others from loading.
+    for (let i = 0; i < fams.length; i += 12) {
+      const part = fams.slice(i, i + 12);
+      part.forEach(n => loadedFonts.add(n));
+      const l = document.createElement('link'); l.rel = 'stylesheet';
+      l.href = 'https://fonts.googleapis.com/css2?' + part.map(n => 'family=' + n.replace(/ /g, '+') + (AXES[n] ? ':' + AXES[n] : '')).join('&') + '&display=swap';
+      document.head.appendChild(l);
+    }
+  };
+  // Font list options, grouped, each name written in its own font so the studio can see it before choosing.
+  //   first: the group to show at the top. extra: [value, label] options above the groups (e.g. "Design font", an uploaded font).
+  P.fontGroups = () => (window.PixieCore && window.PixieCore.FONT_GROUPS) || {};
+  P.allFonts = () => Object.values(P.fontGroups()).flat();
+  P.fontOptions = function (selected, first, extra) {
+    const groups = Object.entries(P.fontGroups()).sort((a, b) => (b[0] === first) - (a[0] === first));
+    const opt = (v, l) => `<option value="${P.esc(v)}" style="font-family:'${P.esc(P.fontFamily(v))}', serif;font-size:17px" ${selected === v ? 'selected' : ''}>${P.esc(l)}</option>`;
+    return (extra || []).map(([v, l]) => v ? opt(v, l) : `<option value="" ${!selected ? 'selected' : ''}>${P.esc(l)}</option>`).join('')
+      + groups.map(([g, list]) => `<optgroup label="${P.esc(g)}">${list.map(f => opt(f, f)).join('')}</optgroup>`).join('');
   };
   const SERIF = "'Cormorant Garamond', Georgia, serif";
   P.applyTheme = function (el, t) {
@@ -1132,9 +1166,6 @@
   const PAGE_NAMES = { couple: 'Couple’s view · all couples', board: 'Pixie’s RSVP Board' };
   const COLORS = [['pink', '--b-pink', 'Pink'], ['pinkDark', '--b-pink-dark', 'Deep pink'], ['cream', '--b-cream', 'Cream'],
     ['olive', '--b-olive', 'Olive'], ['sage', '--b-sage', 'Sage'], ['sand', '--b-sand', 'Sand'], ['yellow', '--b-yellow', 'Butter'], ['text', '', 'Text']];
-  const FONTS = ['Italianno', 'Della Respira', 'Great Vibes', 'Gloock', 'Poppins', 'Montserrat', 'Cormorant Garamond', 'Playfair Display', 'Bodoni Moda', 'Lora',
-    'EB Garamond', 'Libre Baskerville', 'Prata', 'Marcellus', 'Cinzel', 'DM Serif Display', 'Italiana', 'Tenor Sans', 'Nunito Sans', 'Josefin Sans', 'Raleway', 'Quicksand',
-    'Pinyon Script', 'Parisienne', 'Alex Brush', 'Allura', 'Dancing Script', 'Tangerine', 'Monsieur La Doulaise', 'Petit Formal Script', 'Imperial Script', 'Corinthia'];
   const TEXT_PRESETS = [
     { k: 'heading', label: 'Add a heading', font: 'Italianno', size: 6, w: 50, color: '#646446' },
     { k: 'sub', label: 'Add a subheading', font: 'Gloock', size: 2.6, w: 40, color: '#4a443a' },
@@ -1303,6 +1334,7 @@
   // ---------- opening and closing the editor (studio only) ----------
   async function openEditor() {
     if (E.open) return;
+    P.loadFonts(P.allFonts()); // so every name in the font lists shows in its own font
     try {
       const st = (await P.api('GET', '/api/board/studio')).studio;
       E.full = st.site || null; E.lib = st.elements || [];
@@ -1641,7 +1673,7 @@
   function flyStyles() {
     const c = E.cur, cs = getComputedStyle(document.body);
     const colorVal = (k, v) => c.colors[k] || toHex(k === 'text' ? cs.color : cs.getPropertyValue(v)) || '#000000';
-    const fontSel = (name, val) => `<select data-x="${name}"><option value="">Design font</option>${FONTS.map(f => `<option ${val === f ? 'selected' : ''} style="font-family:'${f}'">${f}</option>`).join('')}</select>`;
+    const fontSel = (name, val) => `<select data-x="${name}" class="x-font-pick" style="${val ? `font-family:'${P.esc(val)}'` : ''}">${P.fontOptions(val || '', 'Elegant serif & display', [['', 'Design font']])}</select>`;
     return `<h3>Colors</h3><div class="x-swatches">${COLORS.map(([k, v, l]) => `<label class="x-sw"><input type="color" data-x="color" data-k="${k}" value="${colorVal(k, v)}"><span>${l}</span></label>`).join('')}</div>
       <h3>Fonts</h3>
       <label class="x-fl"><span>Titles</span>${fontSel('font-display', c.fonts.display)}</label>
@@ -1681,7 +1713,7 @@
     if (!tb) return;
     if (!E.sel || E.mode !== 'edit') { tb.innerHTML = ''; tb.style.display = 'none'; return; }
     const ib = (x, icon, title, on, extra) => `<button type="button" class="x-ib ${on ? 'is-on' : ''}" data-x="${x}" ${extra || ''} title="${title}" aria-label="${title}" ${on !== undefined ? `aria-pressed="${!!on}"` : ''}>${I[icon] ? ic(icon) : icon}</button>`;
-    const fontSel = (x, val, design) => `<select class="x-font" data-x="${x}" title="Font">${design ? '<option value="">Design font</option>' : ''}${FONTS.map(f => `<option ${val === f ? 'selected' : ''}>${f}</option>`).join('')}</select>`;
+    const fontSel = (x, val, design) => `<select class="x-font" data-x="${x}" title="Font" style="${val ? `font-family:'${P.esc(val)}'` : ''}">${P.fontOptions(val || '', 'Script & calligraphy', design ? [['', 'Design font']] : [])}</select>`;
     const size = (val, unit) => `<div class="x-size"><button type="button" data-x="size-down" aria-label="Smaller text">${ic('minus')}</button><span>${val}${unit}</span><button type="button" data-x="size-up" aria-label="Bigger text">${ic('plus')}</button></div>`;
     const swatch = (x, val, title, kind) => `<label class="x-swatch x-swatch-${kind}" title="${title}"><input type="color" data-x="${x}" value="${val}"><span style="--sw:${val}"></span></label>`;
     const sep = '<span class="x-sep"></span>';
@@ -1898,13 +1930,15 @@ guest: function () {
     person: '<circle cx="24" cy="15" r="7.5"/><path d="M9 41c0-8.5 6.7-14 15-14s15 5.5 15 14"/>',
     calendar: '<rect x="8" y="11" width="32" height="28" rx="5"/><path d="M8 19.5h32M16 7v8M32 7v8"/><path d="M24 34.5s-5-3-5-6.2a2.6 2.6 0 0 1 5-1.2 2.6 2.6 0 0 1 5 1.2c0 3.2-5 6.2-5 6.2z"/>',
     check: '<path d="M10 25l9 9 19-20"/>',
+    back: '<path d="M29 11L16 24l13 13"/>',
     cross: '<path d="M12 12l24 24M36 12L12 36" stroke-width="5"/>',
   };
   // Pinyon Script's own "&" is hard to read, so names borrow a classic script ampersand.
   const names = n => esc(n).replace(/&amp;/g, '<span class="g-amp">&amp;</span>');
   const icon = (name, cls) => `<svg class="${cls || 'g-icon'}" viewBox="0 0 48 48" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
-  // Small gold glow at the top of every card, as in the design.
-  const glow = '<span class="g-glow" aria-hidden="true"></span>';
+  // Small dots at the top of every card showing which step the guest is on, in the couple's colors.
+  const STEPS = ['welcome', 'notice', 'invite', 'reservation', 'thanks'];
+  const steps = () => { const at = STEPS.indexOf(G.step); return at < 0 ? '' : `<span class="g-glow g-steps" aria-hidden="true">${STEPS.map((s, i) => `<i class="${i === at ? 'is-on' : ''}"></i>`).join('')}</span>`; };
   // Thin gold line with a flourish in the middle.
   const flourish = '<svg class="g-flourish" viewBox="0 0 300 16" aria-hidden="true" focusable="false"><path d="M0 8h126M174 8h126"/><path d="M150 8c-6-7-16-7-18-1s8 7 12 2c4-5-2-9-8-6M150 8c6-7 16-7 18-1s-8 7-12 2c-4-5 2-9 8-6M150 8c-4 3-10 4-14 1M150 8c4 3 10 4 14 1"/></svg>';
   // Couple's uploaded logo, or a wreath with their initials.
@@ -1953,11 +1987,13 @@ guest: function () {
 
   const banner = () => G.previewMode ? '<div class="g-preview-banner">Preview · This is what your guests see. Nothing you choose here is saved.</div>' : '';
   const foot = '<p class="g-foot">With Love by Pixie Craft Studio</p>';
+  // Lets guests go back to a screen they skipped past too quickly.
+  const backBtn = () => G.history.length && G.step !== 'thanks' ? `<button type="button" class="g-back" data-act="back" aria-label="Go back to the previous screen">${icon('back', 'g-back-ic')}<span>Back</span></button>` : '';
   function shell(inner, cls) {
     return `<div class="g-page">
       <div class="g-bg" aria-hidden="true"></div>
       ${banner()}
-      <main class="g-card ${cls || ''}">${glow}${inner}</main>
+      <main class="g-card ${cls || ''}">${backBtn()}${steps()}${inner}</main>
       ${foot}
     </div>`;
   }
@@ -2022,7 +2058,7 @@ guest: function () {
         <div class="g-hero" data-region="hero" aria-hidden="true"></div>
         ${banner()}
         <main class="g-card g-card-res">
-          ${glow}
+          ${backBtn()}${steps()}
           <header class="g-res-head">
             <p class="g-greeting">${rich('greeting', r)}</p>
             <h1 class="g-family">${names(r.family)}</h1>
@@ -2407,7 +2443,7 @@ guest: function () {
         ${mine.length ? `<ul class="c-fams">${mine.map(r => `<li class="c-fam"><div class="c-fam-head c-fam-static">
             <span class="c-fam-name">${esc(r.family)}</span>
             <span class="c-fam-meta">${r.seats} seat${r.seats === 1 ? '' : 's'} <span class="c-dot">•</span> ${r.guests.map(g => esc(g.name)).join(', ')}</span>
-            ${r.submittedAt ? '<span class="c-fam-done">Replied</span>' : `<button class="a-link" data-act="add-delete" data-id="${r.id}">Remove</button>`}
+            <span class="c-fam-end">${r.submittedAt ? '<span class="c-fam-done">Replied</span>' : ''}<button class="a-link" data-act="add-delete" data-id="${r.id}">Remove</button></span>
           </div></li>`).join('')}</ul>` : '<p class="c-sub">You haven’t added anyone yet. Guests Pixie Craft Studio set up for you are in your RSVP Tracker.</p>'}
       </section>
     </div>`;
@@ -2484,7 +2520,8 @@ guest: function () {
     if (act === 'add-remove') { V.add.guests.splice(Number(b.dataset.i), 1); render(); }
     if (act === 'add-delete') {
       const r = V.data.reservations.find(x => x.id === b.dataset.id);
-      if (!(await U.confirm({ title: `Remove the ${r.family}?`, message: 'They won’t be able to find their invitation anymore.', yes: 'Remove', danger: true }))) return;
+      const msg = r.submittedAt ? 'They already replied. Their answers will be removed from your RSVP Tracker, and they won’t be able to find their invitation anymore.' : 'They won’t be able to find their invitation anymore.';
+      if (!(await U.confirm({ title: `Remove the ${r.family}?`, message: msg, yes: 'Remove', danger: true }))) return;
       try { await P.api('DELETE', base + '/reservations/' + r.id); await load(); render(); U.toast(`${r.family} was removed.`); }
       catch (err) { U.toast(err.message, 'error'); }
     }
@@ -2849,9 +2886,9 @@ guest: function () {
 
   // Customize (quick look)
   const fontVars = t => `--fs-h:'${esc(P.fontFamily(t.headingFont))}';--fs-b:'${esc(P.fontFamily(t.bodyFont))}';--fs-s:'${esc(P.fontFamily(t.scriptFont))}';--fs-st:${t.headingItalic ? 'italic' : 'normal'}`;
-  function fontSelect(key, label, list) {
-    const t = B.themeDraft, all = t.customFont ? [B.meta.customFont, ...list] : list;
-    return `<label class="a-field"><span>${label}</span><select data-theme="${key}" class="a-font-select" style="font-family:'${esc(P.fontFamily(t[key]))}'">${all.map(f => `<option value="${esc(f)}" style="font-family:'${esc(P.fontFamily(f))}'" ${t[key] === f ? 'selected' : ''}>${esc(f === B.meta.customFont ? f + ' (' + t.customFont.name + ')' : f)}</option>`).join('')}</select></label>`;
+  function fontSelect(key, label, first) {
+    const t = B.themeDraft, mine = t.customFont ? [[B.meta.customFont, B.meta.customFont + ' (' + t.customFont.name + ')']] : [];
+    return `<label class="a-field"><span>${label}</span><select data-theme="${key}" class="a-font-select" style="font-family:'${esc(P.fontFamily(t[key]))}'">${P.fontOptions(t[key], first, mine)}</select></label>`;
   }
   // A % slider for font sizes and card size; the number beside it updates as it moves.
   const slider = (path, label, min, max) => {
@@ -2872,7 +2909,7 @@ guest: function () {
   function viewCustomize() {
     const t = B.themeDraft, m = B.meta;
     // Every font in the lists, so each choice shows in its own style.
-    P.loadFonts([...m.scriptFonts, ...m.headingFonts, ...m.bodyFonts]); P.loadCustomFont(t.customFont);
+    P.loadFonts(P.allFonts()); P.loadCustomFont(t.customFont);
     const sw = (k, p) => `<button type="button" class="a-swatch ${t.palette === k ? 'is-on' : ''}" data-act="palette" data-p="${k}" aria-pressed="${t.palette === k}">
       <span class="a-swatch-dots">${['card', 'accent', 'button', 'text', 'heading'].map(x => `<i style="background:${p[x]}"></i>`).join('')}</span><span>${esc(p.name)}</span></button>`;
     const COLOR_LABELS = [['heading', 'Headings'], ['text', 'Text'], ['button', 'Buttons'], ['accent', 'Icons & accents'], ['card', 'Card']];
@@ -2886,12 +2923,12 @@ guest: function () {
         </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Fonts</h3>
           <p class="a-muted a-small">Elegant fonts, the same families you’ll find in Canva. Have a font file of your own? Upload it below and pick “${esc(m.customFont)}”.</p>
-          <div class="a-font-group">${fontSelect('scriptFont', 'Names (couple, family, “See you soon!”)', m.scriptFonts)}
+          <div class="a-font-group">${fontSelect('scriptFont', 'Names (couple, family, “See you soon!”)', 'Script & calligraphy')}
             <div class="a-font-adjust">${slider('sizes.names', 'Size', 60, 160)}${effectSelect('names', 'Effect')}</div></div>
-          <div class="a-font-group">${fontSelect('headingFont', 'Titles', m.headingFonts)}
+          <div class="a-font-group">${fontSelect('headingFont', 'Titles', 'Elegant serif & display')}
             <div class="a-font-adjust">${slider('sizes.titles', 'Size', 60, 160)}${effectSelect('titles', 'Effect')}</div>
             <label class="a-check"><input type="checkbox" data-theme="headingItalic" ${t.headingItalic ? 'checked' : ''}> Italic titles</label></div>
-          <div class="a-font-group">${fontSelect('bodyFont', 'Text', m.bodyFonts)}
+          <div class="a-font-group">${fontSelect('bodyFont', 'Text', 'Elegant serif & display')}
             <div class="a-font-adjust">${slider('sizes.text', 'Size', 60, 160)}</div></div>
           <p class="a-font-sample" data-region="font-sample" style="${fontVars(t)}"><b>Via &amp; Arkin</b><span>A Little Note!</span>Your seat has been lovingly reserved just for you.</p>
           <div class="a-upload-row">
@@ -3052,7 +3089,7 @@ guest: function () {
 
   // ---------- Design (Canva-style): place your own elements and text on each guest screen ----------
   const D_SCREENS = [['welcome', 'Welcome'], ['notice', 'Heads-up'], ['invite', 'Invitation'], ['reservation', 'Family page'], ['thanks', 'Thank you']];
-  const D_HIDE = [['glow', 'Gold glow at the top'], ['icon', 'Icon and logo'], ['eyebrow', 'Small heading above the title'], ['foot', '“With Love by Pixie Craft Studio”']];
+  const D_HIDE = [['glow', 'Step dots at the top'], ['icon', 'Icon and logo'], ['eyebrow', 'Small heading above the title'], ['foot', '“With Love by Pixie Craft Studio”']];
   const D_LAYERS = [['front', 'In front of everything'], ['under', 'Under the words'], ['behind', 'Behind the card']];
   const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), x => (x % 36).toString(36)).join('');
   function decor() {
@@ -3092,11 +3129,12 @@ guest: function () {
   const dRange = (k, label, min, max, step, v, unit) => `<label class="a-slider d-slider"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-dprop="${k}"><output>${unit === '%' ? Math.round(v * 100) + '%' : Math.round(v) + (unit || '')}</output></label>`;
   function dProps() {
     const e = dSelected();
+    if (e && e.type === 'text') P.loadFonts(P.allFonts());
     if (!e) return `<h3 class="a-h3">Selected element</h3><p class="a-muted a-small">Click an element on the page to move it, resize it from the corner dot, or turn it with the top dot. Arrow keys nudge it.</p>`;
-    const m = B.meta, fonts = [...new Set([...m.scriptFonts, ...m.headingFonts, ...m.bodyFonts])];
+    const m = B.meta;
     const text = e.type === 'text' ? `
       <label class="a-field"><span>Text</span><textarea rows="3" data-dprop="text" maxlength="400">${esc(e.text)}</textarea></label>
-      <label class="a-field"><span>Font</span><select data-dprop="font" class="a-font-select" style="font-family:'${esc(P.fontFamily(e.font))}'">${(B.themeDraft.customFont ? [m.customFont, ...fonts] : fonts).map(f => `<option value="${esc(f)}" style="font-family:'${esc(P.fontFamily(f))}'" ${e.font === f ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
+      <label class="a-field"><span>Font</span><select data-dprop="font" class="a-font-select" style="font-family:'${esc(P.fontFamily(e.font))}'">${P.fontOptions(e.font, 'Script & calligraphy', B.themeDraft.customFont ? [[m.customFont, m.customFont]] : [])}</select></label>
       <div class="d-row"><label class="a-color"><input type="color" data-dprop="color" value="${esc(e.color)}"><span>Color</span></label>
         <button type="button" class="d-tog ${e.bold ? 'is-on' : ''}" data-act="d-toggle" data-k="bold" aria-pressed="${!!e.bold}"><b>B</b></button>
         <button type="button" class="d-tog ${e.italic ? 'is-on' : ''}" data-act="d-toggle" data-k="italic" aria-pressed="${!!e.italic}"><i>I</i></button>

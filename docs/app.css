@@ -43,7 +43,9 @@ body.guest { --g-ink: #1f4d2c; --g-rose: #9a5868; --g-pink: #d38da9; --g-pink-li
 .g-card { position: relative; z-index: 1; width: 100%; max-width: 384px; margin: 0 auto; background: var(--g-card); border-radius: 30px;
   box-shadow: 0 24px 60px rgba(60, 40, 25, .2), 0 2px 6px rgba(60, 40, 25, .06); padding: 22px 30px 32px; text-align: center;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: var(--g-rose); font-family: var(--serif); }
-.g-glow { display: block; width: 13px; height: 9px; margin: 6px auto 12px; border-radius: 50%; background: #f6e7a6; box-shadow: 0 0 6px 3px rgba(246, 226, 150, .75), 0 0 16px 6px rgba(246, 226, 150, .35); }
+.g-glow { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 4px auto 14px; }
+.g-glow i { width: 5px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--g-pink-light) 55%, #fff); transition: width .3s ease; }
+.g-glow i.is-on { width: 18px; background: var(--g-pink); }
 .g-icon { display: block; width: 46px; height: 46px; margin: 0 auto 6px; fill: none; stroke: var(--g-pink-light); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .g-eyebrow { margin: 0 0 22px; font-family: var(--serif); font-size: calc(19px * var(--g-fs-titles, 1)); color: var(--g-pink-light); }
 .g-title { margin: 0 0 18px; font-family: var(--display); font-style: var(--g-head-style); font-weight: 400; font-size: calc(31px * var(--g-fs-titles, 1)); line-height: 1.15; letter-spacing: -.01em; color: var(--g-ink); }
@@ -58,8 +60,10 @@ body.guest { --g-ink: #1f4d2c; --g-rose: #9a5868; --g-pink: #d38da9; --g-pink-li
   background: var(--g-pink); color: #fff6dc; font-family: var(--serif); font-weight: 400; font-size: calc(18px * var(--g-fs-text, 1)); letter-spacing: .02em; text-transform: uppercase; box-shadow: none; }
 .g-btn:hover { background: color-mix(in srgb, var(--g-pink) 88%, #000); }
 .g-btn:disabled { background: color-mix(in srgb, var(--g-pink) 45%, #f1e7e3); color: #fffaf3; box-shadow: none; cursor: not-allowed; }
-.g-back { display: block; margin: 0 0 6px; border: 0; background: none; color: var(--g-rose); cursor: pointer; padding: 4px 0; font: 13px var(--g-small); border-radius: 8px; text-align: left; }
-.g-back:hover { color: var(--g-ink); }
+.g-back { position: absolute; top: 14px; left: 16px; z-index: 3; display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; color: var(--g-rose); cursor: pointer;
+  padding: 6px 10px 6px 4px; font: 500 12.5px var(--g-small); border-radius: 999px; opacity: .85; }
+.g-back:hover, .g-back:focus-visible { opacity: 1; color: var(--g-ink); background: color-mix(in srgb, var(--g-pink-light) 25%, transparent); }
+.g-back-ic { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
 .g-link { margin-top: 18px; border: 0; background: none; color: var(--g-olive); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-family: var(--serif); font-size: calc(19px * var(--g-fs-text, 1)); }
 .g-crest { display: block; width: 116px; height: 116px; margin: -2px auto 8px; object-fit: contain; }
 .g-crest-sm { width: 66px; height: 66px; margin-bottom: 14px; }
@@ -1047,3 +1051,6 @@ body.x-previewing .x-rail, body.x-previewing .x-fly { display: none; }
   .x-fab { right: 12px; bottom: 12px; padding: 10px 16px 10px 13px; }
 }
 .x-glyph { font: 700 15px Georgia, serif; } i.x-glyph { font-weight: 400; font-style: italic; font-size: 16px; }
+
+/* Guests You Added: "Replied" and Remove side by side */
+.c-fam-end { display: inline-flex; align-items: center; gap: 16px; }
