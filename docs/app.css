@@ -1218,12 +1218,15 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 
 /* thank you: the words are written by hand while small butterflies flutter around */
 .f-thanks { --k: calc(max(100vw, 1100px) / 1366 * var(--fs, 1)); position: relative; width: 100%; min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.f-write-img { display: block; width: min(calc(100vw - 24px), calc(370 * var(--k))); margin-top: calc(37 * var(--k)); translate: calc(1.5 * var(--k)) 0;
-  -webkit-mask-image: linear-gradient(90deg, #000 40%, transparent 60%); mask-image: linear-gradient(90deg, #000 40%, transparent 60%);
-  -webkit-mask-size: 260% 100%; mask-size: 260% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: 100% 0; mask-position: 100% 0;
-  animation: f-pen 3s .2s cubic-bezier(.45, .1, .4, 1) forwards; }
+.f-write-img { display: block; position: relative; overflow: hidden; container-type: inline-size; width: min(calc(100vw - 24px), calc(370 * var(--k))); margin-top: calc(37 * var(--k)); translate: calc(1.5 * var(--k)) 0; }
+/* The pen: a soft-edged window slides right while the lettering slides back the same amount, so it stays still and appears left to right.
+   Only transforms move, so the graphics card does it without redrawing the page. */
+.f-pen-mask { display: block; width: calc(100cqw + 50cqw); -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 50cqw), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 50cqw), transparent);
+  animation: f-pen 3s .2s cubic-bezier(.45, .1, .4, 1) both; will-change: transform; }
+.f-pen-mask img { display: block; width: 100cqw; animation: f-pen-back 3s .2s cubic-bezier(.45, .1, .4, 1) both; will-change: transform; }
 .f-write-img + .f-link, .f-write-img ~ .f-link { margin-top: calc(2 * var(--k)); translate: calc(-12.5 * var(--k)) 0; }
-@keyframes f-pen { to { -webkit-mask-position: 0 0; mask-position: 0 0; } }
+@keyframes f-pen { from { transform: translateX(-150cqw); } to { transform: none; } }
+@keyframes f-pen-back { from { transform: translateX(150cqw); } to { transform: none; } }
 .f-write { width: min(calc(100vw - 24px), calc(420 * var(--k))); height: auto; overflow: visible; }
 .f-write text { font-family: var(--f-script); font-size: 92px; }
 .f-write-fill { fill: var(--f-ink); stroke: var(--f-ink); stroke-width: 3.2; stroke-linejoin: round; }
@@ -1255,10 +1258,14 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-stage.g-leave-back { animation: g-out-back .26s ease-in both; pointer-events: none; }
 
 /* Fairy Garden motion: everything ends exactly on the design; nothing changes size or place at rest. */
-.f-bg { animation: f-drift 40s ease-in-out infinite alternate; }
+.f-bg { animation: f-drift 40s ease-in-out infinite alternate; will-change: transform; }
+/* Smoothness: things that animate get their own GPU layer, so the rest of the page isn't redrawn every frame. */
+.f-stage[class*="g-enter"], .f-stage[class*="g-leave"] { will-change: transform, opacity; }
+.f-fly, .f-switch, .f-btn { will-change: transform; }
+.f-btn { backface-visibility: hidden; }
 @keyframes f-drift { from { transform: none; } to { transform: scale(1.04) translate(-.6%, -.4%); } }
 .f-stage.f-card.g-enter-first, .f-stage.f-res.g-enter-first { animation: f-card-in .9s cubic-bezier(.22, .8, .3, 1) both; }
-@keyframes f-card-in { from { opacity: 0; transform: translateY(26px) scale(.96); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes f-card-in { from { opacity: 0; transform: translateY(26px) scale(.96); } to { opacity: 1; transform: none; } }
 .f-card-surprise.g-enter-fwd, .f-card-surprise.g-enter-back { animation: f-surprise .8s cubic-bezier(.3, 1.45, .5, 1) both; }
 @keyframes f-surprise { 0% { opacity: 0; transform: scale(.82) rotate(-3deg); } 60% { opacity: 1; transform: scale(1.025) rotate(.6deg); } 100% { opacity: 1; transform: none; } }
 /* the words arrive one after another */
@@ -1299,7 +1306,7 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
   .f-bg, .f-btn::after, .f-recap li.is-new, .f-stage, .f-stage * { animation: none !important; }
   .f-fly { animation: none !important; }
   .f-write .f-wipe { transform: none; } .f-write-line { display: none; } .f-link { opacity: 1; animation: none; }
-  .f-write-img { animation: none; -webkit-mask-image: none; mask-image: none; }
+  .f-pen-mask, .f-pen-mask img { animation: none; -webkit-mask-image: none; mask-image: none; }
 }
 
 /* board: RSVP design picker */

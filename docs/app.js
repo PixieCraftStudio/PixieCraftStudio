@@ -2357,7 +2357,7 @@ guest: function () {
       return fPage(`<main class="f-stage f-thanks" style="${fSize('fairyThanksSize')}">
           <div class="f-flies" aria-hidden="true">${flies}</div>
           <h1 class="g-sr">${esc(word)}</h1>
-          ${G.site.fairyThanks === C.DEFAULT_SITE.fairyThanks ? `<img class="f-write-img" src="${esc(F('fairy-t-thanks.webp'))}" alt="" aria-hidden="true">` : `<svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
+          ${G.site.fairyThanks === C.DEFAULT_SITE.fairyThanks ? `<span class="f-write-img" aria-hidden="true"><span class="f-pen-mask"><img src="${esc(F('fairy-t-thanks.webp'))}" alt=""></span></span>` : `<svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
             <text x="350" y="118" text-anchor="middle" class="f-write-fill" clip-path="url(#f-wipe)">${esc(word)}</text>
             <text x="350" y="118" text-anchor="middle" class="f-write-line">${esc(word)}</text></svg>`}
           ${G.previewMode ? '<p class="f-note">Preview only: this answer was not saved.</p>' : ''}
