@@ -54,6 +54,30 @@
     thanksHeading: 'Thank You!',
     thanksMessage: 'Thank you for confirming and being part of our special day! ♡ Your presence will make this celebration even more meaningful to us.',
     thanksClosing: 'See you soon!',
+    // Fairy Garden design (chosen per client in Customize)
+    fairyTitle: 'Kindly RSVP!',
+    fairySubtitle: 'A tiny reminder!',
+    fairyMessage: 'I’m still too little to count my guests, so please let my mommy and daddy know if you’re coming to celebrate my special day! Hehe! ♡',
+    fairyClosing: 'See you soon!',
+    fairyNext: 'Next',
+    fairyHello: 'Hello!',
+    fairyAsk: 'What’s your name?',
+    fairyAskSub: 'Let me find your special seat!',
+    fairyPlaceholder: 'First Name Last Name | Ex. Maria Esther Martinez',
+    fairyFind: 'Find my seat',
+    fairyReserved: 'I Reserved',
+    fairySeatsWord: 'Seats',
+    fairyForYou: 'For You!',
+    fairyCount: 'Can you help me count who’s coming? Hehe! Kindly confirm who’s joining from your family or group! ♡',
+    fairyCheck: 'Did I count everyone right?',
+    fairySubmit: 'Submit',
+    fairyThanks: 'Thank You!',
+    fairyBackLink: 'Back to my invitation',
+    fairySurprise: 'Surprise!',
+    fairySurpriseSub: 'No Worries',
+    fairySurpriseDone: '{rep} already RSVP’d for you! Hehe!',
+    fairySurpriseWait: '{rep} will RSVP for you! Hehe!',
+    fairySurpriseButton: 'Back to Invitation',
   };
   const DATE_KEYS = ['deadline', 'weddingDate'];
   // Earlier default texts. If a site still has them unchanged, they are swapped for the current defaults.
@@ -139,7 +163,7 @@
       .replace(/\{deadline\}/g, formatDeadline(site.deadline))
       .replace(/\{date\}/g, formatWeddingDate(site.weddingDate));
     if (r) {
-      out = out.replace(/\{family\}/g, r.family).replace(/\{seats\}/g, String(r.seats))
+      out = out.replace(/\{family\}/g, r.family).replace(/\{seats\}/g, String(r.seats)).replace(/\{rep\}/g, r.rep || r.family)
         .replace(/\b1 seats\b/g, '1 seat');
     }
     return out;
@@ -157,6 +181,7 @@
   function publicReservation(r) {
     return {
       token: r.token, family: r.family, seats: r.seats, sample: !!r.sample, submittedAt: r.submittedAt || null,
+      repId: r.repId || null, rep: ((r.guests.find(g => g.id === r.repId) || {}).name) || null,
       guests: r.guests.map(g => ({ id: g.id, name: g.name, status: g.status })),
     };
   }
@@ -344,10 +369,13 @@
     }
     return { site: out };
   }
+  // The guest RSVP pages come in different designs; the studio picks one per client.
+  const RSVP_DESIGNS = { classic: 'Classic Garden', fairy: 'Fairy Garden' };
   function defaultTheme() {
     return { palette: 'garden', colors: Object.assign({}, PALETTES.garden), headingFont: 'Italianno', headingItalic: false,
       bodyFont: 'Della Respira', scriptFont: 'Great Vibes', background: 'garden', customBg: null, blur: true, logo: null, video: null, customFont: null,
-      sizes: { names: 100, titles: 100, text: 100 }, effects: { names: 'none', titles: 'none' }, cardSize: { desktop: 100, mobile: 90 }, cover: null, decor: null };
+      sizes: { names: 100, titles: 100, text: 100 }, effects: { names: 'none', titles: 'none' }, cardSize: { desktop: 100, mobile: 90 }, cover: null, decor: null,
+      rsvpDesign: 'classic', invitationLink: '' };
   }
   function cleanTheme(body, old) {
     const t = Object.assign(defaultTheme(), old || {});
@@ -414,6 +442,12 @@
       t.decor = d.decor;
     }
     if (body.background !== undefined) { if (!BACKGROUNDS[body.background]) return { error: 'Unknown background.' }; t.background = body.background; }
+    if (body.rsvpDesign !== undefined) { if (!RSVP_DESIGNS[body.rsvpDesign]) return { error: 'Unknown RSVP design.' }; t.rsvpDesign = body.rsvpDesign; }
+    if (body.invitationLink !== undefined) {
+      const v = String(body.invitationLink || '').trim();
+      if (v && (v.length > 500 || !/^https?:\/\/[^\s<>"']+$/i.test(v))) return { error: 'The invitation link must start with https:// (copy it from your browser’s address bar).' };
+      t.invitationLink = v;
+    }
     if (t.background === 'custom' && !t.customBg) return { error: 'Please upload a photo for the background first.' };
     return { theme: t };
   }
@@ -519,8 +553,46 @@
     return { id: c.id, slug: c.slug, couple: c.site.couple, weddingDate: c.site.weddingDate, deadline: c.site.deadline,
       phase: phase(c, now, tz), stats: stats(c), hasCode: !!c.coupleCode, cover: (c.theme && c.theme.cover) || null, updatedAt: c.updatedAt, updatedBy: c.updatedBy, createdAt: c.createdAt };
   }
+  // ---------- seat planner (couple's dashboard) ----------
+  // Floor is 1000 x 700 units. assign: guest id -> table id. Tables never hold more guests than seats.
+  const TABLE_SHAPES = ['round', 'square', 'rect'];
+  const FLOOR_ITEMS = { stage: 'Stage', dance: 'Dance floor', dj: 'DJ / Band', bar: 'Bar', buffet: 'Buffet', cake: 'Cake table', gifts: 'Gift table', photo: 'Photo booth', entrance: 'Entrance' };
+  const emptyPlanner = () => ({ tables: [], items: [], assign: {} });
+  function cleanPlanner(p, client) {
+    if (!p || typeof p !== 'object') return { error: 'The seat plan could not be read. Please try again.' };
+    const out = emptyPlanner(), ids = new Set(), num = (v, lo, hi, d) => inRange(v, lo, hi) ? Math.round(v) : d;
+    const tables = Array.isArray(p.tables) ? p.tables : [], items = Array.isArray(p.items) ? p.items : [];
+    if (tables.length > 120) return { error: 'A seat plan can have up to 120 tables.' };
+    if (items.length > 40) return { error: 'A seat plan can have up to 40 stages and areas.' };
+    for (const t of tables) {
+      if (!t || !/^[a-z0-9]{4,20}$/.test(t.id || '') || ids.has(t.id)) return { error: 'A table in the seat plan is not valid.' };
+      ids.add(t.id);
+      out.tables.push({ id: t.id, name: cleanText(t.name, 40) || 'Table', shape: TABLE_SHAPES.includes(t.shape) ? t.shape : 'round',
+        seats: num(t.seats, 1, 30, 8), vip: !!t.vip, x: num(t.x, 0, 1000, 500), y: num(t.y, 0, 700, 350) });
+    }
+    for (const it of items) {
+      if (!it || !/^[a-z0-9]{4,20}$/.test(it.id || '') || !FLOOR_ITEMS[it.kind]) return { error: 'A stage or area in the seat plan is not valid.' };
+      out.items.push({ id: it.id, kind: it.kind, label: cleanText(it.label, 30) || FLOOR_ITEMS[it.kind], x: num(it.x, 0, 1000, 500), y: num(it.y, 0, 700, 80),
+        w: num(it.w, 30, 900, 220), h: num(it.h, 20, 600, 70) });
+    }
+    const guests = new Set(), count = {};
+    for (const r of client.reservations) for (const g of r.guests) guests.add(g.id);
+    for (const [gid, tid] of Object.entries(p.assign && typeof p.assign === 'object' ? p.assign : {})) {
+      const t = out.tables.find(x => x.id === tid);
+      if (!guests.has(gid) || !t || (count[tid] || 0) >= t.seats) continue;
+      count[tid] = (count[tid] || 0) + 1; out.assign[gid] = tid;
+    }
+    return { planner: out };
+  }
+  // The saved plan, without seats for guests who were removed since.
+  function plannerOf(c) {
+    const p = c.planner || emptyPlanner(), guests = new Set();
+    for (const r of c.reservations) for (const g of r.guests) guests.add(g.id);
+    return { tables: p.tables || [], items: p.items || [], assign: Object.fromEntries(Object.entries(p.assign || {}).filter(([g]) => guests.has(g))) };
+  }
+
   function clientFull(c, now, tz) {
-    return Object.assign(clientSummary(c, now, tz), { site: c.site, theme: c.theme, notes: c.notes || '', reservations: c.reservations, closed: isClosed(c.site, now, tz) });
+    return Object.assign(clientSummary(c, now, tz), { site: c.site, theme: c.theme, notes: c.notes || '', reservations: c.reservations, planner: plannerOf(c), closed: isClosed(c.site, now, tz) });
   }
   // The look a guest page needs.
   function publicTheme(t) { return Object.assign({}, t, { customBg: t.background === 'custom' ? t.customBg : null, cover: null }); }
@@ -581,17 +653,17 @@
       const q = normName(body.name);
       if (q.split(' ').length < 2) return err(400, 'Please type your first name and surname.');
       const pool = c.reservations.filter(r => !r.sample || preview);
-      let found = pool.find(r => r.guests.some(g => normName(g.name) === q));
+      let found = pool.find(r => r.guests.some(g => normName(g.name) === q)), who = found && found.guests.find(g => normName(g.name) === q);
       if (!found) {
         const w = q.split(' '), loose = [];
         for (const r of pool) for (const g of r.guests) {
           const gw = normName(g.name).split(' ');
-          if (gw[0] === w[0] && gw[gw.length - 1] === w[w.length - 1]) loose.push(r);
+          if (gw[0] === w[0] && gw[gw.length - 1] === w[w.length - 1]) loose.push([r, g]);
         }
-        if (loose.length === 1) found = loose[0];
+        if (loose.length === 1) [found, who] = loose[0];
       }
       if (!found) return err(404, 'We couldn’t find that name. Please type your first name and surname exactly as written on your invitation.');
-      return ok({ token: found.token });
+      return ok({ token: found.token, guestId: who ? who.id : null });
     }
     if ((m = path.match(/^\/api\/r\/([A-Za-z0-9]{6,40})$/)) && method === 'GET') {
       const { c, r } = findByToken(m[1]);
@@ -633,17 +705,46 @@
       if (sub === '/version' && method === 'GET') return ok({ version: c.updatedAt });
       if (sub === '/state' && method === 'GET') {
         return ok({ couple: c.site.couple, site: c.site, slug: c.slug, closed: isClosed(c.site, now, tz), stats: stats(c), version: c.updatedAt,
-          reservations: c.reservations.map(r => Object.assign(publicReservation(r), { id: r.id, addedBy: r.addedBy || 'studio', createdAt: r.createdAt || null })) });
+          planner: plannerOf(c), reservations: c.reservations.map(r => Object.assign(publicReservation(r), { id: r.id, addedBy: r.addedBy || 'studio', createdAt: r.createdAt || null })) });
+      }
+      if (sub === '/planner' && method === 'PUT') {
+        const r = cleanPlanner(body.planner, c);
+        if (r.error) return err(400, r.error);
+        c.planner = r.planner; touch(db, c, 'couple');
+        return ok({ ok: true, planner: r.planner, version: c.updatedAt }, { save: true });
       }
       // Couples can add families themselves, and remove the ones they added (even after that family answered).
       if (sub === '/reservations' && method === 'POST') {
         if (isClosed(c.site, now, tz)) return err(403, 'The RSVP deadline has passed. Please message Pixie Craft Studio to add guests.');
         if (c.reservations.filter(r => r.addedBy === 'couple').length >= 500) return err(400, 'That’s a lot of families! Please message Pixie Craft Studio to add more.');
+        // "Per guest": each name becomes its own invitation with one seat.
+        if (Array.isArray(body.people)) {
+          const people = body.people.map(n => cleanText(n, 80)).filter(Boolean).slice(0, 100);
+          if (!people.length) return err(400, 'Please add at least one guest name.');
+          for (const name of people) c.reservations.push({ id: rid(8), token: rid(12), family: name, seats: 1, guests: [{ id: rid(8), name, status: 'awaiting' }],
+            sample: false, addedBy: 'couple', perGuest: true, createdAt: now.toISOString(), submittedAt: null });
+          touch(db, c, 'couple');
+          return ok({ ok: true, added: people.length }, { save: true });
+        }
         const r0 = cleanReservation(Object.assign({}, body, { guests: (body.guests || []).map(g => ({ name: g && g.name })) }));
         if (r0.error) return err(400, r0.error);
         if (r0.guests.length > r0.seats) return err(400, 'There are more guest names than reserved seats.');
-        c.reservations.push(Object.assign({ id: rid(8), token: rid(12) }, r0, { sample: false, addedBy: 'couple', createdAt: now.toISOString(), submittedAt: null }));
+        // The designated RSVP representative is the first name; only they answer for the group in the Fairy Garden design.
+        c.reservations.push(Object.assign({ id: rid(8), token: rid(12) }, r0, { sample: false, addedBy: 'couple', createdAt: now.toISOString(), submittedAt: null },
+          body.rep ? { repId: r0.guests[0].id } : {}));
         touch(db, c, 'couple');
+        return ok({ ok: true }, { save: true });
+      }
+      // Couples can change the names and seats of families they added; answers already given stay with each guest.
+      if ((m = sub.match(/^\/reservations\/([A-Za-z0-9]{1,20})$/)) && method === 'PUT') {
+        const r = c.reservations.find(x => x.id === m[1]);
+        if (!r) return err(404, 'This family was removed.');
+        if (r.addedBy !== 'couple') return err(403, 'Only Pixie Craft Studio can change this family.');
+        const old = new Map(r.guests.map(g => [g.id, g]));
+        const r0 = cleanReservation({ family: body.family, seats: body.seats, guests: (body.guests || []).map(g => ({ id: g && g.id, name: g && g.name, status: g && old.has(g.id) ? old.get(g.id).status : 'awaiting' })) }, r);
+        if (r0.error) return err(400, r0.error);
+        if (r0.guests.length > r0.seats) return err(400, 'There are more guest names than reserved seats.');
+        Object.assign(r, r0); touch(db, c, 'couple');
         return ok({ ok: true }, { save: true });
       }
       if ((m = sub.match(/^\/reservations\/([A-Za-z0-9]{1,20})$/)) && method === 'DELETE') {
@@ -722,7 +823,7 @@
       }
       if (method === 'GET' && path === '/api/board/clients') {
         return ok({ me: who, version: db.version, clients: db.clients.map(c => clientSummary(c, now, tz)),
-          palettes: PALETTES, fontGroups: FONT_GROUPS, headingFonts: HEADING_FONTS, bodyFonts: BODY_FONTS, scriptFonts: SCRIPT_FONTS, customFont: CUSTOM_FONT, effects: EFFECTS, backgrounds: BACKGROUNDS });
+          palettes: PALETTES, fontGroups: FONT_GROUPS, headingFonts: HEADING_FONTS, bodyFonts: BODY_FONTS, scriptFonts: SCRIPT_FONTS, customFont: CUSTOM_FONT, effects: EFFECTS, backgrounds: BACKGROUNDS, rsvpDesigns: RSVP_DESIGNS });
       }
       if (method === 'POST' && path === '/api/board/clients') {
         const couple = cleanText(body.couple, 80);
@@ -824,7 +925,7 @@
   }
 
   return {
-    DEFAULT_SITE, STATUSES, PALETTES, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
+    DEFAULT_SITE, STATUSES, PALETTES, RSVP_DESIGNS, FLOOR_ITEMS, TABLE_SHAPES, cleanPlanner, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
     handle, stats, fill, isClosed, deadlineEnd, formatDeadline, formatWeddingDate, formatLong, formatPadded, validDate, normName,
   };
 });
@@ -897,6 +998,8 @@
   P.logo = P.logo || '/studio-logo.png';
   P.storefront = P.storefront || '/storefront.jpg';
   P.bg = P.bg || '/bg.jpg';
+  // Pictures of the Fairy Garden RSVP design (cut from the studio's design files).
+  P.fairy = P.fairy || (n => (P.fairyAssets && P.fairyAssets[n]) || ((P.pages ? '' : '/') + n));
   P.route = P.route || function () {
     return { path: location.pathname, query: new URLSearchParams(location.search) };
   };
@@ -954,7 +1057,7 @@
     'Quicksand': 'wght@400;600', 'Libre Caslon Display': '', 'DM Serif Display': 'ital@0;1', 'Gloock': '', 'Prata': '', 'Gilda Display': '', 'Marcellus': '', 'Forum': '',
     'Della Respira': '', 'Bellefair': '', 'Italiana': '', 'Tenor Sans': '', 'Great Vibes': '', 'Parisienne': '', 'Pinyon Script': '', 'Alex Brush': '', 'Allura': '',
     'Tangerine': 'wght@400;700', 'Italianno': '', 'Monsieur La Doulaise': '', 'Petit Formal Script': '', 'Mrs Saint Delafield': '', 'Rouge Script': '', 'Imperial Script': '',
-    'Poppins': 'wght@400;500;600;700', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
+    'Poppins': 'wght@400;500;600;700', 'Homemade Apple': '', 'Fuzzy Bubbles': 'wght@400;700', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
   };
   P.FONT_FAMILIES = Object.keys(AXES);
   // The studio's own uploaded font is registered under this name.
@@ -1072,6 +1175,61 @@
         ${flower(88, 82, 46, '#eaa3b5', 10)}${flower(150, 108, 30, '#f2b9a1', 40)}${flower(48, 150, 24, '#e9b6c4', 70)}
         <circle cx="178" cy="60" r="5" fill="#d9b25c" opacity=".55"/><circle cx="118" cy="168" r="4" fill="#e7967f" opacity=".5"/><circle cx="24" cy="100" r="3.5" fill="#d9b25c" opacity=".5"/>
       </g></svg>`;
+  };
+
+  // ---------- motion: entrance animations, scroll reveals and counting numbers ----------
+  // Call P.motion(root, key) after each render. A new key (another page or tab) plays the entrance; the same key only
+  // animates numbers that changed. Uses data attributes, never classes, so the "Edit website" selectors stay the same.
+  const calmMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const ENTER = ['.c-welcome', '.c-when', '.c-panel', '.c-tile', '.c-fam', '.a-login-card', '.b-client', '.a-stat', '.a-panel', '.a-tabs ~ * > section',
+    '.b-hero', '.b-head', '.a-head', '.c-help'].join(',');
+  const NUMBERS = '.c-tile > b, .a-stat-n';
+  const lastKey = new WeakMap(), lastNums = new Map();
+  let seen = null;
+  function countTo(el, from, to) {
+    if (from === to) { el.textContent = to; return; }
+    const t0 = performance.now(), dur = Math.min(1400, 500 + Math.abs(to - from) * 25);
+    el.dataset.counting = '';
+    const step = now => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(step); else delete el.dataset.counting;
+    };
+    requestAnimationFrame(step);
+  }
+  P.motion = function (root, key) {
+    if (!root || document.body.classList.contains('x-editing')) return;
+    const fresh = lastKey.get(root) !== key;
+    lastKey.set(root, key);
+    const calm = calmMotion();
+    // Numbers count up the first time, then roll from the old value to the new one when an RSVP comes in.
+    root.querySelectorAll(NUMBERS).forEach((el, i) => {
+      const to = parseInt(el.textContent, 10);
+      if (isNaN(to)) return;
+      const id = key + '#' + i, from = fresh ? 0 : (lastNums.has(id) ? lastNums.get(id) : to);
+      lastNums.set(id, to);
+      if (calm || from === to) return;
+      el.textContent = from; countTo(el, from, to);
+      if (!fresh) { el.dataset.bump = ''; setTimeout(() => delete el.dataset.bump, 900); }
+    });
+    if (!fresh || calm) return;
+    root.dataset.mIn = '';
+    setTimeout(() => { if (root.dataset.mIn === '') delete root.dataset.mIn; }, 1800);
+    // Parts on screen rise in one after another; parts further down wait until they are scrolled to.
+    if (seen) seen.disconnect();
+    seen = window.IntersectionObserver ? new IntersectionObserver(list => list.forEach(en => {
+      if (!en.isIntersecting) return;
+      seen.unobserve(en.target); en.target.style.setProperty('--m-i', 0); en.target.dataset.anim = 'go';
+      setTimeout(() => delete en.target.dataset.anim, 1200);
+    }), { rootMargin: '0px 0px -8% 0px' }) : null;
+    let n = 0;
+    root.querySelectorAll(ENTER).forEach(el => {
+      if (el.parentElement && el.parentElement.closest('[data-anim]') && !el.matches('.c-tile, .c-fam, .b-client, .a-stat')) return;
+      const below = el.getBoundingClientRect().top > innerHeight * .92;
+      if (below && seen) { el.dataset.anim = 'wait'; seen.observe(el); return; }
+      el.style.setProperty('--m-i', Math.min(n++, 10)); el.dataset.anim = 'go';
+      setTimeout(() => delete el.dataset.anim, 1200 + n * 70);
+    });
   };
 })();
 
@@ -1919,7 +2077,7 @@ guest: function () {
 
   const G = { site: null, closed: false, step: 'welcome', token: tokenFromLink, r: null, answers: {}, error: '', busy: false, previewMode: false, history: [] };
 
-  const t = (key, r) => esc(C.fill(G.site[key], G.site, r));
+  const t = (key, r) => esc(C.fill(G.site[key] != null ? G.site[key] : C.DEFAULT_SITE[key], G.site, r));
   // Text the couple wrote: **bold** words and blank lines between paragraphs are kept.
   // Formatting the studio adds in Wording: **bold**, *italic*, __underline__.
   const rich = (key, r) => t(key, r).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/__(.+?)__/g, '<u>$1</u>')
@@ -1957,11 +2115,11 @@ guest: function () {
   const calm = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let moving = false;
   function transition(change, dir) {
-    const card = app.querySelector('.g-card');
+    const card = app.querySelector('.g-card, .f-stage');
     const show = () => {
       change();
       window.scrollTo(0, 0);
-      const next = app.querySelector('.g-card');
+      const next = app.querySelector('.g-card, .f-stage');
       if (next && !calm()) next.classList.add('g-enter-' + dir);
       const h = app.querySelector('h1, h2');
       if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
@@ -1982,7 +2140,7 @@ guest: function () {
   }
   function back() {
     if (moving) return;
-    transition(() => { G.step = G.history.pop() || 'welcome'; G.error = ''; render(); }, 'back');
+    transition(() => { G.step = G.history.pop() || (fairy() ? 'notice' : 'welcome'); G.error = ''; render(); }, 'back');
   }
 
   const banner = () => G.previewMode ? '<div class="g-preview-banner">Preview · This is what your guests see. Nothing you choose here is saved.</div>' : '';
@@ -2090,7 +2248,9 @@ guest: function () {
     },
     thanks() {
       const going = G.r.guests.filter(g => G.answers[g.id] === 'attending').length;
-      return shell(`
+      // A few petals drift down once to celebrate the answer.
+      const petals = `<div class="g-petals" aria-hidden="true">${Array.from({ length: 22 }, (_, i) => `<i style="--x:${(i * 61) % 100}%;--w:${(i % 8) * .35}s;--d:${5 + (i % 5)}s;--px:${(i % 2 ? 1 : -1) * (30 + (i * 17) % 60)}px;--pr:${200 + (i * 47) % 300}deg"></i>`).join('')}</div>`;
+      return petals + shell(`
         ${crest('g-crest g-crest-sm')}
         <p class="g-thanks-eyebrow">${rich('thanksEyebrow', G.r)}</p>
         <h1 class="g-thanks-title">${rich('thanksHeading', G.r)}</h1>
@@ -2104,6 +2264,111 @@ guest: function () {
       return shell(`<h1 class="g-title">Sorry!</h1><p class="g-text">${esc(G.error || 'This page could not be loaded. Please try again in a moment.')}</p><button class="g-btn" data-act="reload">Try again</button>`);
     },
   };
+
+  // ---------- Fairy Garden design ----------
+  // Kindly RSVP -> Hello, what's your name? -> I reserved N seats for you -> Thank you. Guests who aren't the
+  // Designated RSVP Representative see a "Surprise! No worries" card instead of the answers.
+  const fairy = () => !!(G.theme && G.theme.rsvpDesign === 'fairy');
+  const F = P.fairy;
+  const invite = () => (G.theme && G.theme.invitationLink) || '';
+  const fBack = () => G.history.length && !['thanks', 'surprise'].includes(G.step) ? `<button type="button" class="f-back" data-act="back" aria-label="Go back to the previous screen">${icon('back', 'g-back-ic')}<span>Back</span></button>` : '';
+  const fPage = (inner, cls) => `<div class="f-page ${cls || ''}"><div class="f-bg" aria-hidden="true" style="background-image:url('${esc(F('fairy-bg.jpg'))}')"></div>${banner()}${fBack()}${inner}</div>`;
+  const fCard = (img, cls, inner) => `<main class="f-stage f-card ${cls}" style="background-image:url('${esc(F(img))}')"><div class="f-in">${inner}</div></main>`;
+  const fparas = (key, r) => rich(key, r).split(/\n\s*\n/).map(x => `<p class="f-text">${x.replace(/\n/g, '<br>')}</p>`).join('');
+  const fviews = {
+    notice() {
+      return fPage(fCard('fairy-card-rsvp.webp', 'f-card-rsvp', `
+        <h1 class="f-script f-title">${rich('fairyTitle')}</h1>
+        <p class="f-hand f-sub">${rich('fairySubtitle')}</p>
+        ${fparas('fairyMessage')}
+        <p class="f-text f-closing">${rich('fairyClosing')}</p>
+        <button class="f-btn" data-act="f-next">${rich('fairyNext')}</button>`));
+    },
+    invite() {
+      return fPage(fCard('fairy-card-name.webp', 'f-card-name', `
+        <h1 class="f-script f-title">${rich('fairyHello')}</h1>
+        <p class="f-hand f-sub">${rich('fairyAsk')}</p>
+        <p class="f-text">${rich('fairyAskSub')}</p>
+        <form class="f-search" data-form="search" novalidate>
+          <label for="g-name" class="g-sr">Your first name and last name</label>
+          <input id="g-name" name="name" autocomplete="name" placeholder="${t('fairyPlaceholder')}" required>
+          ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
+          <button class="f-btn" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Finding…' : t('fairyFind')}</button>
+        </form>`));
+    },
+    surprise() {
+      const r = G.r, link = invite();
+      return fPage(fCard('fairy-card-surprise.webp', 'f-card-surprise', `
+        <h1 class="f-script f-title">${rich('fairySurprise', r)}</h1>
+        <p class="f-hand f-sub">${rich('fairySurpriseSub', r)}</p>
+        <p class="f-text">${rich(r.submittedAt ? 'fairySurpriseDone' : 'fairySurpriseWait', r)}</p>
+        ${link ? `<a class="f-btn" href="${esc(link)}" target="_top" rel="noopener">${rich('fairySurpriseButton', r)}</a>`
+          : `<button class="f-btn" data-act="f-again">${rich('fairySurpriseButton', r)}</button>`}`));
+    },
+    reservation() {
+      const r = G.r, me = G.who || r.repId;
+      const going = r.guests.filter(g => G.answers[g.id] === 'attending'), notGoing = r.guests.filter(g => G.answers[g.id] !== 'attending');
+      const rows = r.guests.map(g => {
+        const on = G.answers[g.id] === 'attending';
+        return `<li class="f-row ${g.id === G.justAnswered ? 'is-just' : ''}">
+          <span class="f-row-name">${g.id === me ? '<span class="f-you">You</span>' : ''}${esc(g.name)}</span>
+          <button type="button" class="f-switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(g.name)} is coming" data-act="f-toggle" data-g="${g.id}" ${G.closed ? 'disabled' : ''}><i></i></button></li>`;
+      }).join('');
+      const recap = (arr, yes) => arr.map(g => `<li class="${yes ? 'yes' : 'no'}"><span>${yes ? '✓' : '✕'}</span><span class="f-recap-name">${esc(g.name)}</span><span class="f-recap-st">${yes ? esc(C.fill(G.site.attendingLabel, G.site)) : esc(C.fill(G.site.notAttendingLabel, G.site))}</span></li>`).join('');
+      const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
+        : r.submittedAt ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
+      return fPage(`<main class="f-stage f-res">
+          <div class="f-res-body">
+            <img class="f-deco f-deco-tl" src="${esc(F('fairy-res-tl.webp'))}" alt="" aria-hidden="true">
+            <img class="f-deco f-deco-br" src="${esc(F('fairy-res-br.webp'))}" alt="" aria-hidden="true">
+            <img class="f-deco f-deco-bf" src="${esc(F('fairy-res-butterfly.webp'))}" alt="" aria-hidden="true">
+            <img class="f-deco f-deco-fy" src="${esc(F('fairy-res-fairy.webp'))}" alt="" aria-hidden="true">
+            <div class="f-res-in">
+              <p class="f-hand f-reserved">${rich('fairyReserved', r)}</p>
+              <p class="f-script f-num">${r.seats}</p>
+              <p class="f-hand f-seats">${r.seats === 1 ? esc(C.fill(G.site.fairySeatsWord, G.site, r)).replace(/s$/i, '') : rich('fairySeatsWord', r)}</p>
+              <p class="f-text f-for">${rich('fairyForYou', r)}</p>
+              <p class="f-text f-small">${rich('fairyCount', r)}</p>
+              ${note}
+              <ul class="f-rows">${rows}</ul>
+              <h2 class="f-check">${rich('fairyCheck', r)}</h2>
+              <p class="f-text f-small f-yay">${going.length ? `Yay! ${going.length} out of ${r.guests.length} ${going.length === 1 ? 'is' : 'are'} coming!` : `No one is coming? We’ll miss you!`}</p>
+              <ul class="f-recap">${recap(going, true)}${notGoing.length && going.length ? '<li class="f-gap"></li>' : ''}${recap(notGoing, false)}</ul>
+              ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
+              ${G.closed ? '' : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
+            </div>
+          </div>
+        </main>`, 'f-page-res');
+    },
+    thanks() {
+      const link = invite(), word = C.fill(G.site.fairyThanks, G.site, G.r);
+      // Small butterflies at half opacity drift around the words.
+      const flies = Array.from({ length: 7 }, (_, i) => `<img class="f-fly" src="${esc(F('fairy-butterfly.webp'))}" alt="" style="--i:${i};--s:${[34, 26, 40, 22, 30, 24, 36][i]}px;--d:${[13, 16, 11, 18, 14, 17, 12][i]}s;--w:${-i * 1.7}s">`).join('');
+      return fPage(`<main class="f-stage f-thanks">
+          <div class="f-flies" aria-hidden="true">${flies}</div>
+          <h1 class="g-sr">${esc(word)}</h1>
+          <svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
+            <text x="350" y="118" text-anchor="middle" class="f-write-fill" clip-path="url(#f-wipe)">${esc(word)}</text>
+            <text x="350" y="118" text-anchor="middle" class="f-write-line">${esc(word)}</text></svg>
+          ${G.previewMode ? '<p class="f-note">Preview only: this answer was not saved.</p>' : ''}
+          ${link ? `<a class="f-link" href="${esc(link)}" target="_top" rel="noopener">${rich('fairyBackLink', G.r)}</a>` : ''}
+          <button type="button" class="f-link f-link-sm" data-act="change">change my answers</button>
+        </main>`, 'f-page-thanks');
+    },
+    error() { return views.error(); },
+  };
+  // The handwriting starts once its font is ready, so the pen draws the real letters.
+  function startWriting() {
+    const svg = app.querySelector('.f-write'); if (!svg) return;
+    const go = () => {
+      const line = svg.querySelector('.f-write-line'); let len = 2400;
+      try { len = Math.ceil(line.getComputedTextLength() * 4); } catch (e) { /* keep the default */ }
+      svg.style.setProperty('--len', len);
+      svg.classList.add('is-writing');
+    };
+    const f = document.fonts && document.fonts.load ? document.fonts.load('60px "Homemade Apple"') : Promise.resolve();
+    Promise.race([f, new Promise(r => setTimeout(r, 2500))]).then(go, go);
+  }
 
   // Top of the reservation page: the uploaded video, else the background photo shown clearly.
   let heroToken = 0;
@@ -2131,7 +2396,10 @@ guest: function () {
   function render() {
     // Keep the playing video when only the answers change.
     const hero = app.querySelector('[data-region="hero"] video');
-    app.innerHTML = (views[G.step] || views.welcome)();
+    const V = fairy() ? fviews : views;
+    app.innerHTML = (V[G.step] || V[fairy() ? 'notice' : 'welcome'])();
+    document.body.classList.toggle('is-fairy', fairy());
+    if (fairy()) { P.loadFonts(['Homemade Apple', 'Fuzzy Bubbles', 'Della Respira']); startWriting(); }
     if (G.theme) P.paintBackground(app.querySelector('.g-bg'), G.theme);
     const spot = app.querySelector('[data-region="hero"]');
     if (hero && spot && G.theme && hero.dataset.ref === G.theme.video) { spot.prepend(hero); hero.play().catch(() => {}); }
@@ -2230,7 +2498,11 @@ guest: function () {
     // The look can arrive before this page has finished loading; keep it and use it once ready.
     if (!G.site) { G.pendingTheme = e.data.theme; return; }
     if (!G.previewMode) return;
-    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo;
+    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink;
+    if (G.theme && G.theme.rsvpDesign !== e.data.theme.rsvpDesign) {
+      const map = e.data.theme.rsvpDesign === 'fairy' ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
+      if (map[G.step]) G.step = map[G.step];
+    }
     G.theme = e.data.theme; P.applyTheme(document.body, G.theme); P.paintBackground(app.querySelector('.g-bg'), G.theme);
     if (logoChanged && !moving) { const y = scrollY; render(); scrollTo(0, y); } else { paintHero(); paintDecor(); }
   });
@@ -2241,6 +2513,8 @@ guest: function () {
     if (!G.site) { G.site = data.site; G.theme = data.theme; slug = data.slug; G.previewMode = data.preview; }
     G.answers = {};
     for (const g of G.r.guests) if (g.status !== 'awaiting') G.answers[g.id] = g.status;
+    // Fairy Garden uses on/off switches, so everyone starts as coming until the guest switches them off.
+    if (G.theme && G.theme.rsvpDesign === 'fairy') for (const g of G.r.guests) if (!G.answers[g.id]) G.answers[g.id] = 'attending';
   }
 
   app.addEventListener('click', async e => {
@@ -2248,6 +2522,26 @@ guest: function () {
     if (!b || design) return;
     const act = b.dataset.act;
     if (act === 'back') return back();
+    if (act === 'f-next') {
+      if (!G.token) return go('invite');
+      try { await openReservation(G.token); go('reservation'); }
+      catch (err) { G.token = null; G.pendingError = err.message; go('invite'); }
+      return;
+    }
+    if (act === 'f-again') { G.history = ['notice']; return transition(() => { G.step = 'invite'; G.error = ''; G.token = tokenFromLink; render(); }, 'back'); }
+    if (act === 'f-toggle') {
+      const id = b.dataset.g; G.answers[id] = G.answers[id] === 'attending' ? 'not_attending' : 'attending'; G.justAnswered = id;
+      const y = window.scrollY; render(); window.scrollTo(0, y);
+      const again = app.querySelector(`[data-act="f-toggle"][data-g="${id}"]`); if (again) again.focus({ preventScroll: true });
+      return;
+    }
+    if (act === 'f-submit') {
+      for (const g of G.r.guests) if (!G.answers[g.id]) G.answers[g.id] = 'attending';
+      G.busy = true; G.error = ''; render();
+      try { await P.api('POST', '/api/r/' + G.token + '/rsvp', { answers: G.answers, preview }); G.busy = false; G.history = []; go('thanks'); }
+      catch (err) { G.busy = false; G.error = err.message; if (err.status === 403) G.closed = true; render(); }
+      return;
+    }
     if (act === 'next') return go('notice');
     if (act === 'reload') return location.reload();
     if (act === 'understand') {
@@ -2288,9 +2582,12 @@ guest: function () {
     const name = e.target.name.value;
     G.busy = true; G.error = ''; render();
     try {
-      const { token } = await P.api('POST', '/api/w/' + slug + '/find', { name, preview });
+      const { token, guestId } = await P.api('POST', '/api/w/' + slug + '/find', { name, preview });
       await openReservation(token);
-      G.busy = false; go('reservation');
+      G.who = guestId || null;
+      // Fairy Garden: only the Designated RSVP Representative answers; anyone else in the group gets a friendly note.
+      const repHere = G.r.repId && G.r.guests.some(g => g.id === G.r.repId);
+      G.busy = false; go(fairy() && repHere && guestId && guestId !== G.r.repId ? 'surprise' : 'reservation');
     } catch (err) {
       G.busy = false; G.error = err.message; render();
       const input = app.querySelector('#g-name'); input.value = name; input.focus();
@@ -2305,13 +2602,16 @@ guest: function () {
       if (G.pendingTheme && G.previewMode) G.theme = G.pendingTheme;
       P.applyTheme(document.body, G.theme);
       document.title = G.site.couple + ' · RSVP';
-      const step = route.query.get('step');
+      let step = route.query.get('step');
+      if (fairy()) { G.step = 'notice'; if (step === 'welcome') step = null; if (step === 'notice') step = null; if (G.token) for (const g of G.r.guests) if (!G.answers[g.id]) G.answers[g.id] = 'attending'; }
       if (step === 'reservation' && G.token) { G.history = ['welcome', 'notice']; G.step = 'reservation'; }
       else if (step === 'thanks' && G.token) { G.history = []; G.step = 'thanks'; }
-      else if (step === 'invite') { G.history = ['welcome', 'notice']; G.step = 'invite'; }
+      else if (step === 'invite') { G.history = fairy() ? ['notice'] : ['welcome', 'notice']; G.step = 'invite'; }
       else if (step === 'notice') { G.history = ['welcome']; G.step = 'notice'; }
+      else if (step === 'surprise' && G.token && fairy()) { G.history = []; G.step = 'surprise'; }
       render();
-      if (!calm() && !design) app.querySelector('.g-card').classList.add('g-enter-first');
+      const first = app.querySelector('.g-card, .f-stage');
+      if (!calm() && !design && first) first.classList.add('g-enter-first');
     } catch (err) {
       G.error = err.message; G.site = Object.assign({}, C.DEFAULT_SITE); G.step = 'error'; render();
     }
@@ -2418,11 +2718,11 @@ guest: function () {
     return `<div class="c-body c-body-top">
       <section class="c-panel">
         <h2 class="c-h2">Add Guest/s</h2>
-        <p class="c-sub">Add a family or group and the names of everyone invited. They can then find their invitation by typing their name on your RSVP page.</p>
+        <p class="c-sub">Add the person who will RSVP for their family or group, then everyone invited with them. They can find their invitation by typing their name on your RSVP page.</p>
         ${d.closed ? '<p class="c-note">Your RSVP deadline has passed, so new guests can’t be added here. Please message Pixie Craft Studio.</p>' : `
         <form class="c-form" data-form="add" novalidate>
           <div class="c-two">
-            <label class="b-field"><span>Family or group name</span><input data-add="family" value="${esc(a.family)}" placeholder="eg. Santos Family" maxlength="80"></label>
+            <label class="b-field"><span>Designated RSVP Representative</span><input data-add="family" value="${esc(a.family)}" placeholder="eg. Maria Esther Martinez" maxlength="80"></label>
             <label class="b-field"><span>Reserved seats</span><input data-add="seats" value="${esc(a.seats)}" inputmode="numeric" placeholder="eg. 3" maxlength="2"></label>
           </div>
           <div class="b-field"><span>Guest names</span>
@@ -2489,7 +2789,7 @@ guest: function () {
 
   function render() {
     if (!V.info) return;
-    if (!V.data) { app.innerHTML = signIn(); document.title = V.info.couple + ' · RSVP tracker'; return; }
+    if (!V.data) { app.innerHTML = signIn(); document.title = V.info.couple + ' · RSVP tracker'; P.motion(app, 'signin'); return; }
     const tabs = [['tracker', 'RSVP Tracker'], ['add', '+ Add Guest/s'], ['preview', 'Preview My RSVP']];
     app.innerHTML = `<div class="c-app">
       <header class="c-top">
@@ -2502,6 +2802,7 @@ guest: function () {
       ${footer()}</div>`;
     document.title = V.data.couple + ' · RSVP tracker';
     if (V.tab === 'preview') loadFrame();
+    P.motion(app, 'couple:' + V.tab);
   }
 
   async function load() { V.data = await P.api('GET', base + '/state'); }
@@ -2542,13 +2843,15 @@ guest: function () {
   app.addEventListener('submit', async e => {
     e.preventDefault();
     if (e.target.dataset.form === 'add') {
-      const a = V.add, guests = a.guests.map(x => x.trim()).filter(Boolean), seats = Number(a.seats || guests.length);
-      V.addError = !a.family.trim() ? 'Please type a family or group name.' : !guests.length ? 'Please add at least one guest name.'
+      // The representative is the first guest on the list; the other names follow.
+      const a = V.add, repName = a.family.trim(), others = a.guests.map(x => x.trim()).filter(x => x && x.toLowerCase() !== repName.toLowerCase());
+      const guests = repName ? [repName, ...others] : others, seats = Number(a.seats || guests.length);
+      V.addError = !repName ? 'Please type the name of the Designated RSVP Representative.'
         : !Number.isInteger(seats) || seats < 1 ? 'Reserved seats must be a number, like 3.' : guests.length > seats ? 'There are more names than reserved seats.' : '';
       if (V.addError) return render();
       V.busy = true; render();
       try {
-        await P.api('POST', base + '/reservations', { family: a.family, seats, guests: guests.map(name => ({ name })) });
+        await P.api('POST', base + '/reservations', { family: repName, seats, guests: guests.map(name => ({ name })), rep: true });
         const fam = a.family.trim();
         V.add = { family: '', seats: '', guests: [''] }; V.busy = false; V.addError = ''; await load(); render(); U.toast(`${fam} was added to your guest list!`);
       } catch (err) { V.busy = false; V.addError = err.message; render(); }
@@ -2917,6 +3220,13 @@ guest: function () {
       <span class="a-bg-thumb" data-bg="${k}" style="${k === 'garden' ? `background-image:url('${esc(P.bg)}')` : k === 'custom' && t.customBg ? `background-image:url('${t.customBg}')` : ''}"></span><span>${esc(label)}</span></button>`;
     return `<div class="a-customize">
       <form class="a-stack" data-form="theme" novalidate>
+        <section class="a-panel a-stack"><h3 class="a-h3">RSVP design</h3>
+          <p class="a-muted a-small">Choose which RSVP pages this couple’s guests see.</p>
+          <div class="a-designs">${Object.entries(m.rsvpDesigns || { classic: 'Classic Garden', fairy: 'Fairy Garden' }).map(([k, l]) => `<button type="button" class="a-design-tile ${(t.rsvpDesign || 'classic') === k ? 'is-on' : ''}" data-act="rsvp-design" data-d="${k}" aria-pressed="${(t.rsvpDesign || 'classic') === k}">
+            <span class="a-design-thumb" data-d="${k}" style="background-image:url('${esc(k === 'fairy' ? P.fairy('fairy-card-rsvp.webp') : P.bg)}')"></span><span>${esc(l)}</span></button>`).join('')}</div>
+          <label class="a-field"><span>Invitation link (for the “Back to Invitation” buttons)</span><input data-theme="invitationLink" type="url" value="${esc(t.invitationLink || '')}" placeholder="https://… link to the couple’s e-invitation" maxlength="500"></label>
+          <p class="a-muted a-small">Used in the Fairy Garden design. Leave it empty to hide those buttons.</p>
+        </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Color palette</h3>
           <div class="a-swatches">${Object.entries(m.palettes).map(([k, p]) => sw(k, p)).join('')}</div>
           <details class="a-more"><summary>Fine-tune colors</summary><div class="a-colors">${COLOR_LABELS.map(([k, l]) => `<label class="a-color"><input type="color" data-color="${k}" value="${esc(t.colors[k])}"><span>${l}</span></label>`).join('')}</div></details>
@@ -3046,6 +3356,10 @@ guest: function () {
     ['Family Page', 'Family name and seats are filled in automatically.', [['greeting', 'Greeting (above the family name)', 'area'], ['seatsLabel', 'Label under the seat number'], ['onlyListedNote', 'Note about who is included', 'area']]],
     ['Guest Answers', 'The answer and recap part.', [['confirmTitle', 'Title above the guest names'], ['responseInstructions', 'Response instructions', 'area'], ['attendingLabel', 'Attending button'], ['notAttendingLabel', 'Not Attending button'], ['reviewTitle', 'Recap title'], ['reviewSubtitle', 'Recap note'], ['attendingGroupLabel', 'Heading for guests attending'], ['notAttendingGroupLabel', 'Heading for guests not attending'], ['submitButton', 'Submit button'], ['adultsOnly', 'Adults-only notice', 'area']]],
     ['Thank-You Screen', 'Shown after a guest sends their RSVP.', [['thanksEyebrow', 'Small line above the heading'], ['thanksHeading', 'Heading'], ['thanksMessage', 'Message', 'area'], ['thanksClosing', 'Closing']]],
+    ['Fairy Garden Design', 'Only used when Customize › RSVP design is “Fairy Garden”. {rep} is the Designated RSVP Representative.', [['fairyTitle', 'Card 1 title'], ['fairySubtitle', 'Card 1 small heading'], ['fairyMessage', 'Card 1 message', 'area'], ['fairyClosing', 'Card 1 closing'], ['fairyNext', 'Card 1 button'],
+      ['fairyHello', 'Name card title'], ['fairyAsk', 'Name card question'], ['fairyAskSub', 'Name card line'], ['fairyPlaceholder', 'Name box hint'], ['fairyFind', 'Name card button'],
+      ['fairyReserved', 'Above the seat number'], ['fairySeatsWord', 'Below the seat number'], ['fairyForYou', 'Line below “Seats”'], ['fairyCount', 'Instructions', 'area'], ['fairyCheck', 'Recap title'], ['fairySubmit', 'Submit button'],
+      ['fairyThanks', 'Thank-you words'], ['fairyBackLink', 'Thank-you link text'], ['fairySurprise', 'Surprise title'], ['fairySurpriseSub', 'Surprise small heading'], ['fairySurpriseDone', 'Surprise message (after they answered)', 'area'], ['fairySurpriseWait', 'Surprise message (not answered yet)', 'area'], ['fairySurpriseButton', 'Surprise button']]],
   ];
   function viewWording() {
     const s = B.siteDraft;
@@ -3328,13 +3642,14 @@ guest: function () {
   // ---------- render & navigation ----------
   function render(withFrame) {
     if (!B.auth) return;
-    if (!B.list) { app.innerHTML = viewSignIn(); document.title = 'Sign in · Pixie’s RSVP Board'; if (P.siteStart) P.siteStart({ page: 'board', root: app, canEdit: false, site: null }); return; }
+    if (!B.list) { app.innerHTML = viewSignIn(); document.title = 'Sign in · Pixie’s RSVP Board'; if (P.siteStart) P.siteStart({ page: 'board', root: app, canEdit: false, site: null }); P.motion(app, 'signin'); return; }
     const inner = B.view === 'new' ? viewTracker() + viewNew() : B.view === 'studio' ? viewTracker() + viewStudio() : B.view === 'client' && B.client ? viewClient() : viewTracker();
     app.innerHTML = layout(inner);
     // Studio-wide website edits (words, colors, elements) and the "Edit website" button. Only the studio ever reaches this page.
     if (P.siteStart) P.siteStart({ page: 'board', root: app, canEdit: true, site: B.studio && B.studio.site });
     document.title = (B.view === 'client' && B.client ? B.client.couple + ' · ' : '') + 'Pixie’s RSVP Board';
     if (withFrame !== false && B.view === 'client' && (B.tab === 'preview' || B.tab === 'customize' || B.tab === 'design')) loadFrame();
+    P.motion(app, B.view === 'client' && B.client ? 'client:' + B.client.id + ':' + B.tab : 'tracker');
   }
   const dirty = () => B.formDirty || B.siteDirty || B.themeDirty;
   async function leaveOk() {
@@ -3445,6 +3760,7 @@ guest: function () {
       }
       // customize
       case 'palette': { const p = B.meta.palettes[b.dataset.p]; B.themeDraft.palette = b.dataset.p; B.themeDraft.colors = { heading: p.heading, text: p.text, button: p.button, accent: p.accent, card: p.card }; return themeChanged(true); }
+      case 'rsvp-design': B.themeDraft.rsvpDesign = b.dataset.d; return themeChanged(true);
       case 'bg': if (b.dataset.bg === 'custom' && !B.themeDraft.customBg) { app.querySelector('[data-bind="bgfile"]').click(); return; } B.themeDraft.background = b.dataset.bg; return themeChanged(true);
       case 'cancel-theme': resetDrafts(); render(); return;
       case 'look-screen':
