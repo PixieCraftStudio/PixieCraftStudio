@@ -2325,7 +2325,7 @@ guest: function () {
           <span class="f-row-name">${g.id === me ? '<span class="f-you">You</span>' : ''}${esc(g.name)}</span>
           <button type="button" class="f-switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(g.name)} is coming" data-act="f-toggle" data-g="${g.id}" ${G.closed ? 'disabled' : ''}><i></i></button></li>`;
       }).join('');
-      const recap = (arr, yes) => arr.map(g => `<li class="${yes ? 'yes' : 'no'}"><span>${yes ? '✓' : '✕'}</span><span class="f-recap-name">${esc(g.name)}</span><span class="f-recap-st">${yes ? esc(C.fill(G.site.attendingLabel, G.site)) : esc(C.fill(G.site.notAttendingLabel, G.site))}</span></li>`).join('');
+      const recap = (arr, yes) => arr.map(g => `<li class="${yes ? 'yes' : 'no'}${g.id === G.justAnswered ? ' is-new' : ''}"><span>${yes ? '✓' : '✕'}</span><span class="f-recap-name">${esc(g.name)}</span><span class="f-recap-st">${yes ? esc(C.fill(G.site.attendingLabel, G.site)) : esc(C.fill(G.site.notAttendingLabel, G.site))}</span></li>`).join('');
       const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
         : r.submittedAt ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
       return fPage(`<main class="f-stage f-res">
@@ -2538,7 +2538,9 @@ guest: function () {
     if (act === 'f-toggle') {
       const id = b.dataset.g; G.answers[id] = G.answers[id] === 'attending' ? 'not_attending' : 'attending'; G.justAnswered = id;
       const y = window.scrollY; render(); window.scrollTo(0, y);
-      const again = app.querySelector(`[data-act="f-toggle"][data-g="${id}"]`); if (again) again.focus({ preventScroll: true });
+      const again = app.querySelector(`[data-act="f-toggle"][data-g="${id}"]`);
+      // Slide the knob from where it was to where it is now.
+      if (again) { again.classList.toggle('is-on'); void again.offsetWidth; again.classList.toggle('is-on'); again.focus({ preventScroll: true }); }
       return;
     }
     if (act === 'f-submit') {
@@ -3301,9 +3303,18 @@ guest: function () {
         </div>
       </form>
       <div class="a-customize-preview"><div class="a-seg a-seg-sm" role="group" aria-label="Preview screen">${[['welcome', 'Welcome'], ['invite', 'Invitation'], ['family', 'Family page']].map(([k, l]) => `<button type="button" data-act="look-screen" data-s="${k}" aria-pressed="${(B.lookScreen || 'welcome') === k}">${l}</button>`).join('')}</div>
-        <div class="a-frame mobile"><iframe title="Look preview" data-region="frame"></iframe></div></div>
+        <div class="a-seg a-seg-sm a-look-device" role="group" aria-label="Screen size"><button type="button" data-act="look-device" data-d="mobile" aria-pressed="${B.lookDevice !== 'desktop'}">Phone</button><button type="button" data-act="look-device" data-d="desktop" aria-pressed="${B.lookDevice === 'desktop'}">Computer</button></div>
+        <div class="a-frame ${B.lookDevice === 'desktop' ? 'a-frame-pc' : 'mobile'}" data-region="look-frame"><iframe title="Look preview" data-region="frame"></iframe></div></div>
     </div>`;
   }
+  // "Computer" preview: a full 1366 × 768 screen, shrunk to fit the preview column.
+  function fitLookFrame() {
+    const box = app.querySelector('[data-region="look-frame"]'); if (!box) return;
+    const f = box.querySelector('iframe');
+    if (!box.classList.contains('a-frame-pc')) { f.style.transform = ''; box.style.height = ''; return; }
+    const sc = box.clientWidth / 1366; f.style.transform = `scale(${sc})`; box.style.height = Math.round(768 * sc + 16) + 'px';
+  }
+  window.addEventListener('resize', () => fitLookFrame());
   function sendTheme() {
     const f = app.querySelector('[data-region="frame"]');
     if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'pixie-theme', theme: B.themeDraft }, '*');
@@ -3404,7 +3415,7 @@ guest: function () {
       f.addEventListener('load', sendTheme);
       const r = c.reservations[0], scr = B.lookScreen || 'welcome';
       P.setFrame(f, scr === 'family' && r ? '/r/' + r.token + '?preview=1&step=reservation' : '/w/' + c.slug + '?preview=1' + (scr === 'invite' ? '&step=invite' : ''));
-      paintVideoThumb(); return;
+      paintVideoThumb(); fitLookFrame(); return;
     }
     P.setFrame(f, B.previewTarget ? '/r/' + B.previewTarget + '?preview=1&step=reservation' : '/w/' + c.slug + '?preview=1');
   }
@@ -3771,6 +3782,10 @@ guest: function () {
       case 'rsvp-design': B.themeDraft.rsvpDesign = b.dataset.d; return themeChanged(true);
       case 'bg': if (b.dataset.bg === 'custom' && !B.themeDraft.customBg) { app.querySelector('[data-bind="bgfile"]').click(); return; } B.themeDraft.background = b.dataset.bg; return themeChanged(true);
       case 'cancel-theme': resetDrafts(); render(); return;
+      case 'look-device': {
+        B.lookDevice = b.dataset.d; app.querySelectorAll('[data-act="look-device"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.d === B.lookDevice));
+        app.querySelector('[data-region="look-frame"]').className = 'a-frame ' + (B.lookDevice === 'desktop' ? 'a-frame-pc' : 'mobile'); fitLookFrame(); return;
+      }
       case 'look-screen':
         if (b.dataset.s === 'family' && !B.client.reservations.length) return U.toast('Add a family to the guest list first to preview the family page.');
         B.lookScreen = b.dataset.s; app.querySelectorAll('[data-act="look-screen"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === B.lookScreen)); return loadFrame();
@@ -3805,6 +3820,13 @@ guest: function () {
   app.addEventListener('input', e => {
     const el = e.target, bind = el.dataset.bind;
     if (B.tab === 'design' && B.view === 'client' && dInput(el)) return;
+    // The Hello card size slider: show the Hello card in the preview and resize it while sliding.
+    if (el.dataset.theme === 'fairyNameSize') {
+      B.themeDraft.fairyNameSize = Number(el.value);
+      const out = el.closest('label').querySelector('.a-range-val'); if (out) out.textContent = el.value + '%';
+      if (B.lookScreen !== 'invite') { B.lookScreen = 'invite'; app.querySelectorAll('[data-act="look-screen"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === 'invite')); loadFrame(); }
+      return themeChanged(false);
+    }
     if (el.dataset.nest) {
       const [a, b] = el.dataset.nest.split('.');
       B.themeDraft[a] = Object.assign({}, B.themeDraft[a], { [b]: Number(el.value) });

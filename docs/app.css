@@ -1244,7 +1244,49 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-stage.g-leave-fwd { animation: g-out-fwd .26s ease-in both; pointer-events: none; }
 .f-stage.g-leave-back { animation: g-out-back .26s ease-in both; pointer-events: none; }
 
+/* Fairy Garden motion: everything ends exactly on the design; nothing changes size or place at rest. */
+.f-bg { animation: f-drift 40s ease-in-out infinite alternate; }
+@keyframes f-drift { from { transform: none; } to { transform: scale(1.04) translate(-.6%, -.4%); } }
+.f-stage.f-card.g-enter-first, .f-stage.f-res.g-enter-first { animation: f-card-in .9s cubic-bezier(.22, .8, .3, 1) both; }
+@keyframes f-card-in { from { opacity: 0; transform: translateY(26px) scale(.96); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.f-card-surprise.g-enter-fwd, .f-card-surprise.g-enter-back { animation: f-surprise .8s cubic-bezier(.3, 1.45, .5, 1) both; }
+@keyframes f-surprise { 0% { opacity: 0; transform: scale(.82) rotate(-3deg); } 60% { opacity: 1; transform: scale(1.025) rotate(.6deg); } 100% { opacity: 1; transform: none; } }
+/* the words arrive one after another */
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > *, .f-stage[class*="g-enter"] .f-row { animation: f-up .6s cubic-bezier(.22, .8, .3, 1) both; animation-delay: .25s; }
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > :nth-child(2) { animation-delay: .33s; }
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > :nth-child(3) { animation-delay: .41s; }
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > :nth-child(4) { animation-delay: .49s; }
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > :nth-child(5) { animation-delay: .57s; }
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > :nth-child(6) { animation-delay: .65s; }
+.f-stage[class*="g-enter"] :is(.f-in, .f-res-in, .f-search) > :nth-child(n+7) { animation-delay: .73s; }
+.f-stage[class*="g-enter"] .f-search > * { animation-delay: .6s; } .f-stage[class*="g-enter"] .f-search > :nth-child(n+3) { animation-delay: .7s; }
+.f-stage[class*="g-enter"] .f-row:nth-child(1) { animation-delay: .7s; } .f-stage[class*="g-enter"] .f-row:nth-child(2) { animation-delay: .78s; }
+.f-stage[class*="g-enter"] .f-row:nth-child(3) { animation-delay: .86s; } .f-stage[class*="g-enter"] .f-row:nth-child(n+4) { animation-delay: .94s; }
+.f-stage[class*="g-enter"] .f-res-in > .f-rows { animation: none; }
+@keyframes f-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* the seat number pops in */
+.f-stage[class*="g-enter"] .f-res-in > .f-num { animation: f-pop .8s .4s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes f-pop { from { opacity: 0; transform: scale(.3) rotate(-12deg); } to { opacity: 1; transform: none; } }
+/* buttons */
+.f-btn { transition: background .25s, transform .25s cubic-bezier(.3, 1.4, .5, 1), box-shadow .25s; overflow: hidden; position: relative; }
+.f-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(199, 146, 147, .4); }
+.f-btn:active:not(:disabled) { transform: translateY(0) scale(.95); box-shadow: none; transition-duration: .08s; }
+.f-btn::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 45%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); transform: translateX(-130%) skewX(-20deg); pointer-events: none; }
+.f-btn:hover:not(:disabled)::after { animation: f-sheen .9s ease-out; }
+@keyframes f-sheen { to { transform: translateX(330%) skewX(-20deg); } }
+.f-search input { transition: box-shadow .25s, background .25s; }
+.f-search input:focus { background: #ebe6d6; }
+/* guest list */
+.f-row { transition: background .25s; } .f-row:hover { background: rgba(230, 225, 207, .35); }
+.f-switch { transition: background .35s; } .f-switch:active i { width: calc(19 * var(--k)); }
+.f-switch.is-on:active i { transform: translateX(calc(17 * var(--k))); }
+.f-recap li.is-new { animation: f-new .55s cubic-bezier(.22, .8, .3, 1); }
+@keyframes f-new { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.f-yay { transition: color .3s; }
+.f-link { transition: color .3s, letter-spacing .3s; }
+
 @media (prefers-reduced-motion: reduce) {
+  .f-bg, .f-btn::after, .f-recap li.is-new, .f-stage, .f-stage * { animation: none !important; }
   .f-fly { animation: none !important; }
   .f-write .f-wipe { transform: none; } .f-write-line { display: none; } .f-link { opacity: 1; animation: none; }
   .f-write-img { animation: none; -webkit-mask-image: none; mask-image: none; }
@@ -1258,3 +1300,6 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .a-design-thumb { display: block; aspect-ratio: 3 / 4; border-radius: 10px; background: center / cover no-repeat #f6f0e4; }
 .a-design-thumb[data-d="fairy"] { background-size: contain; background-color: #efe7d6; }
 .a-field input[type="range"] { padding: 0; border: 0; background: none; box-shadow: none; height: 28px; accent-color: var(--rasp, #c27390); cursor: pointer; }
+.a-look-device { margin: 0 auto 10px; }
+.a-frame.a-frame-pc { position: relative; width: 100%; max-width: 560px; border: 8px solid #3d2e29; border-radius: 14px; }
+.a-frame.a-frame-pc iframe { width: 1366px; height: 768px; transform-origin: 0 0; }
