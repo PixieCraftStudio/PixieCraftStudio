@@ -1,5 +1,5 @@
 // Pixie Craft Studio RSVP, GitHub Pages version. Built by build-pages.js from core.js and public/*.js; edit those, not this file.
-// Pixie Craft Studio · Wedding RSVP: shared data rules and API.
+// Pixie Craft Studio · Event RSVP: shared data rules and API.
 // Runs inside server.js (Node) and inside the single-file version (browser), so both behave the same.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -24,8 +24,8 @@
     noticeContact: 'Once the deadline passes, this RSVP page will close, and responses can no longer be submitted or edited here. Need to make a last-minute change? Just reach out to {couple} directly, and we’ll do our best to help!',
     noticeClosing: 'Your presence would mean so much! ˚ ༘♡ ⋆｡˚',
     noticeButton: 'Got It!',
-    // 3. Wedding invitation
-    invitationHeading: 'The Wedding of',
+    // 3. Event invitation
+    invitationHeading: 'You’re Invited to Celebrate with',
     couple: 'Marione & Janrick',
     weddingDate: '2034-12-08',
     inviteQuestion: 'Ready to join our celebration?',
@@ -59,18 +59,18 @@
     fairySubtitle: 'A tiny reminder!',
     fairyMessage: 'I’m still too little to count my guests, so please let my mommy and daddy know if you’re coming to celebrate my special day! Hehe! ♡',
     fairyClosing: 'See you soon!',
-    fairyNext: 'Next',
+    fairyNext: 'NEXT',
     fairyHello: 'Hello!',
     fairyAsk: 'What’s your name?',
     fairyAskSub: 'Let me find your special seat!',
     fairyPlaceholder: 'First Name Last Name | Ex. Maria Esther Martinez',
-    fairyFind: 'Find my seat',
+    fairyFind: 'FIND MY SEAT',
     fairyReserved: 'I Reserved',
     fairySeatsWord: 'Seats',
     fairyForYou: 'For You!',
     fairyCount: 'Can you help me count who’s coming? Hehe! Kindly confirm who’s joining from your family or group! ♡',
     fairyCheck: 'Did I count everyone right?',
-    fairySubmit: 'Submit',
+    fairySubmit: 'SUBMIT',
     fairyThanks: 'Thank You!',
     fairyBackLink: 'Back to my invitation',
     fairySurprise: 'Surprise!',
@@ -82,6 +82,10 @@
   const DATE_KEYS = ['deadline', 'weddingDate'];
   // Earlier default texts. If a site still has them unchanged, they are swapped for the current defaults.
   const OLD_DEFAULTS = {
+    invitationHeading: ['The Wedding of'],
+    fairyNext: ['Next'],
+    fairyFind: ['Find my seat'],
+    fairySubmit: ['Submit'],
     welcomeEyebrow: ['Before You Begin'],
     welcomeTitle: ['Seats are Personally Reserved for You'],
     welcomeMessage: ['We have sent this RSVP invitation to a specific family member only to confirm the family member’s attendance. Kindly coordinate with one another if attending or not. Thank you!'],
@@ -375,7 +379,7 @@
     return { palette: 'garden', colors: Object.assign({}, PALETTES.garden), headingFont: 'Italianno', headingItalic: false,
       bodyFont: 'Della Respira', scriptFont: 'Great Vibes', background: 'garden', customBg: null, blur: true, logo: null, video: null, customFont: null,
       sizes: { names: 100, titles: 100, text: 100 }, effects: { names: 'none', titles: 'none' }, cardSize: { desktop: 100, mobile: 90 }, cover: null, decor: null,
-      rsvpDesign: 'classic', invitationLink: '' };
+      rsvpDesign: 'classic', invitationLink: '', fairyNameSize: 100 };
   }
   function cleanTheme(body, old) {
     const t = Object.assign(defaultTheme(), old || {});
@@ -432,7 +436,7 @@
       for (const k of ['desktop', 'mobile']) if (body.cardSize[k] !== undefined) { if (!pct(body.cardSize[k], 70, 120)) return { error: 'Card size goes from 70% to 120%.' }; t.cardSize[k] = body.cardSize[k]; }
     }
     if (body.cover !== undefined) {
-      if (body.cover !== null && !IMAGE_URL.test(body.cover)) return { error: 'The couple photo must be a JPG, PNG or WebP picture.' };
+      if (body.cover !== null && !IMAGE_URL.test(body.cover)) return { error: 'The client photo must be a JPG, PNG or WebP picture.' };
       if (body.cover && body.cover.length > 1.5e6) return { error: 'That photo is too big. Please use a smaller one.' };
       t.cover = body.cover;
     }
@@ -447,6 +451,11 @@
       const v = String(body.invitationLink || '').trim();
       if (v && (v.length > 500 || !/^https?:\/\/[^\s<>"']+$/i.test(v))) return { error: 'The invitation link must start with https:// (copy it from your browser’s address bar).' };
       t.invitationLink = v;
+    }
+    if (body.fairyNameSize !== undefined) {
+      const n = Math.round(Number(body.fairyNameSize));
+      if (!(n >= 60 && n <= 160)) return { error: 'The Hello card size must be between 60% and 160%.' };
+      t.fairyNameSize = n;
     }
     if (t.background === 'custom' && !t.customBg) return { error: 'Please upload a photo for the background first.' };
     return { theme: t };
@@ -482,7 +491,7 @@
     ];
   }
   function slugify(s) {
-    return normName(String(s).replace(/&/g, ' ')).replace(/ /g, '-').slice(0, 40) || 'wedding';
+    return normName(String(s).replace(/&/g, ' ')).replace(/ /g, '-').slice(0, 40) || 'event';
   }
   function uniqueSlug(db, base, exceptId) {
     let slug = base, n = 2;
@@ -827,11 +836,11 @@
       }
       if (method === 'POST' && path === '/api/board/clients') {
         const couple = cleanText(body.couple, 80);
-        if (!couple) return err(400, 'Please type the couple’s names.');
-        if (!validDate(body.weddingDate) || !validDate(body.deadline)) return err(400, 'Please choose the wedding date and the RSVP deadline.');
-        if (body.deadline > body.weddingDate) return err(400, 'The RSVP deadline should be before the wedding date.');
+        if (!couple) return err(400, 'Please type the host or celebrant name.');
+        if (!validDate(body.weddingDate) || !validDate(body.deadline)) return err(400, 'Please choose the event date and the RSVP deadline.');
+        if (body.deadline > body.weddingDate) return err(400, 'The RSVP deadline should be before the event date.');
         let coupleCode = null;
-        if (body.code) { if (!/^\d{6}$/.test(body.code)) return err(400, 'The couple’s code must be 6 numbers.'); coupleCode = await ctx.hashPin(String(body.code)); }
+        if (body.code) { if (!/^\d{6}$/.test(body.code)) return err(400, 'The client’s code must be 6 numbers.'); coupleCode = await ctx.hashPin(String(body.code)); }
         const c = newClient(db, { couple, weddingDate: body.weddingDate, deadline: body.deadline, coupleCode, notes: cleanText(body.notes, 500), sample: !!body.sample });
         db.clients.push(c);
         touch(db, c, who);
@@ -869,7 +878,7 @@
           }
           if (body.notes !== undefined) c.notes = cleanText(body.notes, 500);
           if (body.code !== undefined) {
-            if (!/^\d{6}$/.test(String(body.code))) return err(400, 'The couple’s code must be 6 numbers.');
+            if (!/^\d{6}$/.test(String(body.code))) return err(400, 'The client’s code must be 6 numbers.');
             c.coupleCode = await ctx.hashPin(String(body.code));
           }
           touch(db, c, who);
@@ -1057,7 +1066,7 @@
     'Quicksand': 'wght@400;600', 'Libre Caslon Display': '', 'DM Serif Display': 'ital@0;1', 'Gloock': '', 'Prata': '', 'Gilda Display': '', 'Marcellus': '', 'Forum': '',
     'Della Respira': '', 'Bellefair': '', 'Italiana': '', 'Tenor Sans': '', 'Great Vibes': '', 'Parisienne': '', 'Pinyon Script': '', 'Alex Brush': '', 'Allura': '',
     'Tangerine': 'wght@400;700', 'Italianno': '', 'Monsieur La Doulaise': '', 'Petit Formal Script': '', 'Mrs Saint Delafield': '', 'Rouge Script': '', 'Imperial Script': '',
-    'Poppins': 'wght@400;500;600;700', 'Homemade Apple': '', 'Fuzzy Bubbles': 'wght@400;700', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
+    'Poppins': 'wght@400;500;600;700', 'Homemade Apple': '', 'Cedarville Cursive': '', 'Fuzzy Bubbles': 'wght@400;700', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
   };
   P.FONT_FAMILIES = Object.keys(AXES);
   // The studio's own uploaded font is registered under this name.
@@ -1321,7 +1330,7 @@
 (function () {
   'use strict';
   const P = window.PIXIE, esc = P.esc, U = window.PixieUI;
-  const PAGE_NAMES = { couple: 'Couple’s view · all couples', board: 'Pixie’s RSVP Board' };
+  const PAGE_NAMES = { couple: 'Client’s view · all clients', board: 'Pixie’s RSVP Board' };
   const COLORS = [['pink', '--b-pink', 'Pink'], ['pinkDark', '--b-pink-dark', 'Deep pink'], ['cream', '--b-cream', 'Cream'],
     ['olive', '--b-olive', 'Olive'], ['sage', '--b-sage', 'Sage'], ['sand', '--b-sand', 'Sand'], ['yellow', '--b-yellow', 'Butter'], ['text', '', 'Text']];
   const TEXT_PRESETS = [
@@ -1737,7 +1746,7 @@
     if (el) { if (el.type !== 'text') return; target = nodeOf(el.id).querySelector('.x-el-t'); text = el.text; }
     else {
       node = textNodeOf(E.sel.el);
-      if (!node) { U.toast(E.sel.el && E.sel.el.closest(NO_TEXT) ? 'These words come from each couple’s guest list, so they can’t be retyped.' : 'Click right on the words you want to change.'); return; }
+      if (!node) { U.toast(E.sel.el && E.sel.el.closest(NO_TEXT) ? 'These words come from each client’s guest list, so they can’t be retyped.' : 'Click right on the words you want to change.'); return; }
       target = node.parentElement; text = norm(node.data);
     }
     const r = (el ? nodeOf(el.id) : target).getBoundingClientRect(), cs = getComputedStyle(target);
@@ -1952,7 +1961,7 @@
     try {
       const st = (await P.api('PUT', '/api/board/studio', { site: full })).studio;
       E.full = st.site; E.cur = clone(st.site.pages[E.page]); E.saved = clone(E.cur); E.savedHere = true;
-      U.toast(E.page === 'couple' ? 'Saved! Every couple’s view now shows your changes.' : 'Saved!');
+      U.toast(E.page === 'couple' ? 'Saved! Every client’s view now shows your changes.' : 'Saved!');
     } catch (err) { U.toast(err.message, 'error'); }
     E.saving = false; changed();
   }
@@ -2272,13 +2281,15 @@ guest: function () {
   const F = P.fairy;
   const invite = () => (G.theme && G.theme.invitationLink) || '';
   const fBack = () => G.history.length && !['thanks', 'surprise'].includes(G.step) ? `<button type="button" class="f-back" data-act="back" aria-label="Go back to the previous screen">${icon('back', 'g-back-ic')}<span>Back</span></button>` : '';
-  const fPage = (inner, cls) => `<div class="f-page ${cls || ''}"><div class="f-bg" aria-hidden="true" style="background-image:url('${esc(F('fairy-bg.jpg'))}')"></div>${banner()}${fBack()}${inner}</div>`;
-  const fCard = (img, cls, inner) => `<main class="f-stage f-card ${cls}" style="background-image:url('${esc(F(img))}')"><div class="f-in">${inner}</div></main>`;
+  const fPage = (inner, cls) => `<div class="f-page ${cls || ''}"><div class="f-bg" aria-hidden="true" style="background-image:url('${esc(F('fairy-bg.jpg'))}')"></div>${banner()}${inner}</div>`;
+  const fCard = (img, cls, inner, css) => `<main class="f-stage f-card ${cls}" style="background-image:url('${esc(F(img))}');${css || ''}"><div class="f-in">${inner}</div></main>`;
+  // Runs of capitals (like RSVP) get a little air, as in the design.
+  const fcaps = html => html.replace(/(^|>)([^<]+)/g, (m, a, txt) => a + txt.replace(/[A-Z]{2,}/g, w => `<span class="f-caps">${w}</span>`));
   const fparas = (key, r) => rich(key, r).split(/\n\s*\n/).map(x => `<p class="f-text">${x.replace(/\n/g, '<br>')}</p>`).join('');
   const fviews = {
     notice() {
       return fPage(fCard('fairy-card-rsvp.webp', 'f-card-rsvp', `
-        <h1 class="f-script f-title">${rich('fairyTitle')}</h1>
+        ${G.site.fairyTitle === C.DEFAULT_SITE.fairyTitle ? `<h1 class="f-title f-title-img"><img src="${esc(F('fairy-t-kindly.webp'))}" alt="${esc(G.site.fairyTitle)}"></h1>` : `<h1 class="f-script f-title">${fcaps(rich('fairyTitle'))}</h1>`}
         <p class="f-hand f-sub">${rich('fairySubtitle')}</p>
         ${fparas('fairyMessage')}
         <p class="f-text f-closing">${rich('fairyClosing')}</p>
@@ -2294,7 +2305,7 @@ guest: function () {
           <input id="g-name" name="name" autocomplete="name" placeholder="${t('fairyPlaceholder')}" required>
           ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
           <button class="f-btn" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Finding…' : t('fairyFind')}</button>
-        </form>`));
+        </form>`, `--fs:${(Number(G.theme.fairyNameSize) || 100) / 100}`));
     },
     surprise() {
       const r = G.r, link = invite();
@@ -2318,11 +2329,7 @@ guest: function () {
       const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
         : r.submittedAt ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
       return fPage(`<main class="f-stage f-res">
-          <div class="f-res-body">
-            <img class="f-deco f-deco-tl" src="${esc(F('fairy-res-tl.webp'))}" alt="" aria-hidden="true">
-            <img class="f-deco f-deco-br" src="${esc(F('fairy-res-br.webp'))}" alt="" aria-hidden="true">
-            <img class="f-deco f-deco-bf" src="${esc(F('fairy-res-butterfly.webp'))}" alt="" aria-hidden="true">
-            <img class="f-deco f-deco-fy" src="${esc(F('fairy-res-fairy.webp'))}" alt="" aria-hidden="true">
+          <div class="f-res-body" style="${['l1', 'l2', 'l3', 'r1', 'r2', 'r3'].map(k => `--${k}:url('${esc(F('fairy-res-' + k + (k[1] === '2' ? '.png' : '.webp')))}')`).join(';')}">
             <div class="f-res-in">
               <p class="f-hand f-reserved">${rich('fairyReserved', r)}</p>
               <p class="f-script f-num">${r.seats}</p>
@@ -2347,12 +2354,11 @@ guest: function () {
       return fPage(`<main class="f-stage f-thanks">
           <div class="f-flies" aria-hidden="true">${flies}</div>
           <h1 class="g-sr">${esc(word)}</h1>
-          <svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
+          ${G.site.fairyThanks === C.DEFAULT_SITE.fairyThanks ? `<img class="f-write-img" src="${esc(F('fairy-t-thanks.webp'))}" alt="" aria-hidden="true">` : `<svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
             <text x="350" y="118" text-anchor="middle" class="f-write-fill" clip-path="url(#f-wipe)">${esc(word)}</text>
-            <text x="350" y="118" text-anchor="middle" class="f-write-line">${esc(word)}</text></svg>
+            <text x="350" y="118" text-anchor="middle" class="f-write-line">${esc(word)}</text></svg>`}
           ${G.previewMode ? '<p class="f-note">Preview only: this answer was not saved.</p>' : ''}
-          ${link ? `<a class="f-link" href="${esc(link)}" target="_top" rel="noopener">${rich('fairyBackLink', G.r)}</a>` : ''}
-          <button type="button" class="f-link f-link-sm" data-act="change">change my answers</button>
+          ${link ? `<a class="f-link" href="${esc(link)}" target="_top" rel="noopener">${rich('fairyBackLink', G.r)}</a>` : `<button type="button" class="f-link" data-act="f-again">${rich('fairyBackLink', G.r)}</button>`}
         </main>`, 'f-page-thanks');
     },
     error() { return views.error(); },
@@ -2399,7 +2405,7 @@ guest: function () {
     const V = fairy() ? fviews : views;
     app.innerHTML = (V[G.step] || V[fairy() ? 'notice' : 'welcome'])();
     document.body.classList.toggle('is-fairy', fairy());
-    if (fairy()) { P.loadFonts(['Homemade Apple', 'Fuzzy Bubbles', 'Della Respira']); startWriting(); }
+    if (fairy()) { P.loadFonts(['Homemade Apple', 'Cedarville Cursive', 'Fuzzy Bubbles', 'Gilda Display']); startWriting(); }
     if (G.theme) P.paintBackground(app.querySelector('.g-bg'), G.theme);
     const spot = app.querySelector('[data-region="hero"]');
     if (hero && spot && G.theme && hero.dataset.ref === G.theme.video) { spot.prepend(hero); hero.play().catch(() => {}); }
@@ -2498,7 +2504,7 @@ guest: function () {
     // The look can arrive before this page has finished loading; keep it and use it once ready.
     if (!G.site) { G.pendingTheme = e.data.theme; return; }
     if (!G.previewMode) return;
-    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink;
+    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || G.theme.fairyNameSize !== e.data.theme.fairyNameSize;
     if (G.theme && G.theme.rsvpDesign !== e.data.theme.rsvpDesign) {
       const map = e.data.theme.rsvpDesign === 'fairy' ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
       if (map[G.step]) G.step = map[G.step];
@@ -2638,7 +2644,7 @@ guest: function () {
     const i = V.info;
     return `<div class="a-login">${P.floral('a-floral a-floral-tl')}${P.floral('a-floral a-floral-br')}<div class="a-login-card">
       <img class="a-login-logo" src="${esc(studio().logo || P.logo)}" alt="">
-      <p class="a-brand-name">Pixie Craft Studio</p><p class="a-brand-label">Couple's RSVP View</p>
+      <p class="a-brand-name">Pixie Craft Studio</p><p class="a-brand-label">Client's RSVP View</p>
       <p class="c-login-names">${names(i.couple)}</p>
       <h1>See who's coming</h1>
       ${i.hasCode ? `<form data-form="login" class="a-stack" novalidate>
@@ -2657,7 +2663,7 @@ guest: function () {
         <div class="c-hero-in">
           <div class="c-welcome"><p class="c-welcome-word">Welcome!</p><h1 class="c-names">${names(d.couple)}</h1></div>
           <div class="c-when">
-            <p class="c-when-label">Your Wedding:</p>
+            <p class="c-when-label">Your Event:</p>
             <p class="c-count-text">${esc(C.formatPadded(site.weddingDate))}</p>
             <p class="c-deadline"><b>RSVP Deadline:</b> ${esc(C.formatPadded(site.deadline))}${d.closed ? ' <span class="c-closed">Closed</span>' : ''}</p>
           </div>
@@ -2904,9 +2910,9 @@ guest: function () {
     siteDraft: null, siteDirty: false, themeDraft: null, themeDirty: false, upload: null, newCode: null,
     previewTarget: '', previewDevice: 'mobile', version: 0, pending: false,
   };
-  const PHASE = { open: ['Collecting RSVPs', ''], closed: ['RSVP closed', 'a-pill-closed'], done: ['Wedding done', 'a-pill-done'] };
+  const PHASE = { open: ['Collecting RSVPs', ''], closed: ['RSVP closed', 'a-pill-closed'], done: ['Event done', 'a-pill-done'] };
   const TABS = [['guests', 'Guest List'], ['upload', 'Upload RSVP'], ['links', 'RSVP Links'], ['customize', 'Customize'], ['design', 'Design'], ['wording', 'Wording'], ['preview', 'Preview']];
-  const bundleNote = () => P.bundle ? '<div class="a-banner a-banner-info"><span><strong>Try-out version.</strong> This file keeps everything in this browser only. Links you copy here only open on this computer, and nothing syncs to couples or guests. Host the full site for real clients.</span></div>' : '';
+  const bundleNote = () => P.bundle ? '<div class="a-banner a-banner-info"><span><strong>Try-out version.</strong> This file keeps everything in this browser only. Links you copy here only open on this computer, and nothing syncs to clients or guests. Host the full site for real clients.</span></div>' : '';
   const randomCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
   async function api(method, url, body) {
@@ -2935,7 +2941,7 @@ guest: function () {
     if (au.setupNeeded) {
       return `<div class="a-login">${P.floral('a-floral a-floral-tl')}${P.floral('a-floral a-floral-br')}<div class="a-login-card">${brand}
         <h1>Set up the studio sign-in</h1>
-        <p class="a-muted">This board is only for Pixie Craft Studio. Couples and guests never see it.</p>
+        <p class="a-muted">This board is only for Pixie Craft Studio. Clients and guests never see it.</p>
         ${bundleNote()}
         <form data-form="setup" class="a-stack" novalidate>
           ${au.needsSetupCode ? '<label class="a-field"><span>Setup code</span><input name="setupCode" inputmode="numeric" autocomplete="off" required><small>' + (P.pages ? 'The 6 numbers you saved as SETUP_CODE in Supabase.' : 'Shown in the window where the website was started.') + '</small></label>' : ''}
@@ -2978,13 +2984,13 @@ guest: function () {
       .sort((a, b) => (a.phase === 'done') - (b.phase === 'done') || a.weddingDate.localeCompare(b.weddingDate));
     const count = k => all.filter(c => c.phase === k).length;
     const chip = (k, label, n) => `<button class="a-chip ${B.trackFilter === k ? 'is-on' : ''}" data-act="track-filter" data-f="${k}" aria-pressed="${B.trackFilter === k}">${label} <span>${n}</span></button>`;
-    return `<div class="b-head"><div><h1 class="b-title">Client Tracker</h1><p>Every couple’s RSVPs, all in one place. Select a couple to manage their guests, invitation links, and wedding theme with ease.</p></div>
+    return `<div class="b-head"><div><h1 class="b-title">Client Tracker</h1><p>Every client’s RSVPs, all in one place. Select a client to manage their guests, invitation links, and event theme with ease.</p></div>
         <button class="b-btn b-btn-big" data-act="go" data-view="new">+ New Client</button></div>
-      <div class="b-toolbar"><div class="a-chips" role="group" aria-label="Show">${chip('all', 'All', all.length)}${chip('open', 'Collecting RSVPs', count('open'))}${chip('closed', 'RSVP Closed', count('closed'))}${chip('done', 'Wedding Done', count('done'))}</div>
-        ${all.length > 6 ? `<label class="a-search a-search-inline"><span class="a-sr">Search clients</span><input type="search" data-bind="trackQuery" value="${esc(B.trackQuery)}" placeholder="Search couple names..."></label>` : ''}</div>
+      <div class="b-toolbar"><div class="a-chips" role="group" aria-label="Show">${chip('all', 'All', all.length)}${chip('open', 'Collecting RSVPs', count('open'))}${chip('closed', 'RSVP Closed', count('closed'))}${chip('done', 'Event Done', count('done'))}</div>
+        ${all.length > 6 ? `<label class="a-search a-search-inline"><span class="a-sr">Search clients</span><input type="search" data-bind="trackQuery" value="${esc(B.trackQuery)}" placeholder="Search clients..."></label>` : ''}</div>
       <div data-region="clients">${list.length ? `<div class="b-clients">${list.map(clientCard).join('')}</div>`
         : all.length ? '<p class="a-muted a-center">No clients match.</p>'
-        : `<div class="a-empty">${P.floral('a-floral a-floral-empty')}<h2>No clients yet</h2><p>Add your first couple to create their RSVP page.</p><button class="b-btn b-btn-big" data-act="go" data-view="new">+ New Client</button></div>`}</div>`;
+        : `<div class="a-empty">${P.floral('a-floral a-floral-empty')}<h2>No clients yet</h2><p>Add your first client to create their RSVP page.</p><button class="b-btn b-btn-big" data-act="go" data-view="new">+ New Client</button></div>`}</div>`;
   }
   function clientCard(c) {
     const s = c.stats, [label, cls] = PHASE[c.phase];
@@ -2994,7 +3000,7 @@ guest: function () {
       <div class="b-cover">${c.cover ? `<img src="${esc(c.cover)}" alt="">` : P.monogram(c.couple, 'b-cover-mono')}</div>
       <div class="b-client-top"><span class="b-pill ${cls}">${label}</span>${c.phase === 'open' ? `<span>${days} day${days === 1 ? '' : 's'} to deadline</span>` : ''}</div>
       <h2 class="b-client-name">${esc(c.couple)}</h2>
-      <p class="b-client-dates">Wedding: ${esc(C.formatPadded(c.weddingDate))} | RSVP by ${esc(C.formatPadded(c.deadline))}</p>
+      <p class="b-client-dates">Event: ${esc(C.formatPadded(c.weddingDate))} | RSVP by ${esc(C.formatPadded(c.deadline))}</p>
       ${U.progress(s)}
       <div class="b-client-foot"><p class="b-client-nums"><span><strong>${s.invited}</strong> Invited</span><span><strong>${s.attending}</strong> Yes</span><span><strong>${s.notAttending}</strong> No</span><span><strong>${s.awaiting}</strong> Waiting</span></p>
         <button class="b-open" data-act="open" data-id="${c.id}"><span>Open</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></button></div>
@@ -3008,13 +3014,13 @@ guest: function () {
       <button type="button" class="b-close" data-act="go" data-view="tracker" aria-label="Close">×</button>
       <h2 class="b-title b-modal-title" id="b-new-title">New Client</h2>
       <form class="b-form" data-form="new" novalidate>
-        <label class="b-field"><span>Couple’s Names</span><input name="couple" value="${esc(f.couple || '')}" placeholder="eg. Jennie & Taehyung" required maxlength="80"></label>
-        <div class="b-two"><label class="b-field"><span>Wedding Date</span><input name="weddingDate" type="date" value="${esc(f.weddingDate || '')}" required></label>
+        <label class="b-field"><span>Host or Celebrant Name(s)</span><input name="couple" value="${esc(f.couple || '')}" placeholder="eg. Mia Santos, or Jennie & Taehyung" required maxlength="80"></label>
+        <div class="b-two"><label class="b-field"><span>Event Date</span><input name="weddingDate" type="date" value="${esc(f.weddingDate || '')}" required></label>
         <label class="b-field"><span>RSVP Deadline</span><input name="deadline" type="date" value="${esc(f.deadline || '')}" required><small>Guests can’t answer after this date.</small></label></div>
-        <label class="b-field"><span>Couple’s 6-Number Code</span><span class="b-inline"><input name="code" inputmode="numeric" maxlength="6" value="${esc(f.code || randomCode())}" required><button type="button" class="b-btn b-btn-soft" data-act="gen-code">New Code</button></span>
-          <small>The couple uses this to open their RSVP tracker. Their anniversary (like 120825) works well.</small></label>
+        <label class="b-field"><span>Client’s 6-Number Code</span><span class="b-inline"><input name="code" inputmode="numeric" maxlength="6" value="${esc(f.code || randomCode())}" required><button type="button" class="b-btn b-btn-soft" data-act="gen-code">New Code</button></span>
+          <small>The client uses this to open their RSVP tracker. A special date (like 120825) works well.</small></label>
         <label class="b-field"><span>Notes</span><small class="b-under">Only you can see this.</small><textarea name="notes" rows="4">${esc(f.notes || '')}</textarea></label>
-        <label class="b-check"><input type="checkbox" name="sample" ${f.sample === false ? '' : 'checked'}> Add an example family so the couple can try the RSVP</label>
+        <label class="b-check"><input type="checkbox" name="sample" ${f.sample === false ? '' : 'checked'}> Add an example family so the client can try the RSVP</label>
         ${B.error ? `<p class="a-error" role="alert">${esc(B.error)}</p>` : ''}
         <div class="b-actions"><button class="b-btn b-btn-create" ${B.busy ? 'disabled' : ''}>${B.busy ? 'Creating…' : 'Create'}</button></div>
       </form></div></div>`;
@@ -3031,12 +3037,12 @@ guest: function () {
       <button type="button" class="b-close" data-act="go" data-view="tracker" aria-label="Close">×</button>
       <h2 class="b-title b-modal-title" id="b-studio-title">Studio Settings</h2>
       <form class="b-form" data-form="studio" novalidate>
-        ${pic('logo', 'Studio logo', 'Shown at the top of this board and in every couple’s view.', 'a-logo-thumb')}
-        ${pic('banner', 'Couple’s view banner', 'The picture behind “Welcome!” in every couple’s view. Without one, the Pixie Craft storefront is shown.', 'a-cover-thumb')}
+        ${pic('logo', 'Studio logo', 'Shown at the top of this board and in every client’s view.', 'a-logo-thumb')}
+        ${pic('banner', 'Client’s view banner', 'The picture behind “Welcome!” in every client’s view. Without one, the Pixie Craft storefront is shown.', 'a-cover-thumb')}
         <label class="b-field"><span>Facebook page</span><input name="facebook" type="url" value="${esc(st.facebook || '')}" placeholder="https://facebook.com/pixiecraftstudio"></label>
         <label class="b-field"><span>TikTok</span><input name="tiktok" type="url" value="${esc(st.tiktok || '')}" placeholder="https://tiktok.com/@pixiecraftstudio"></label>
         <label class="b-field"><span>Instagram</span><input name="instagram" type="url" value="${esc(st.instagram || '')}" placeholder="https://instagram.com/pixiecraftstudio"></label>
-        <label class="b-field"><span>Help note in the couple’s view</span><textarea name="helpNote" rows="2">${esc(st.helpNote || '')}</textarea></label>
+        <label class="b-field"><span>Help note in the client’s view</span><textarea name="helpNote" rows="2">${esc(st.helpNote || '')}</textarea></label>
         <div class="b-actions b-actions-split"><button type="button" class="a-link" data-act="backup">Download a backup of everything</button><button class="b-btn b-btn-create" ${B.busy ? 'disabled' : ''}>Save</button></div>
       </form></div></div>`;
   }
@@ -3047,8 +3053,8 @@ guest: function () {
     const body = { guests: B.form ? viewForm : viewGuests, upload: viewUpload, links: viewLinks, customize: viewCustomize, design: viewDesign, wording: viewWording, preview: viewPreview }[B.tab]();
     return `<button class="a-back" data-act="go" data-view="tracker">← All clients</button>
       <div class="a-client-head"><div><h1 class="a-script a-client-title">${esc(c.couple)}</h1>
-        <p class="a-muted">Wedding ${esc(C.formatLong(c.weddingDate))} · RSVP by ${esc(C.formatLong(c.deadline))} <span class="a-pill ${cls}">${label}</span></p></div>
-        <div class="a-row"><button class="a-btn a-btn-sm a-btn-ghost" data-act="open-guest">Open RSVP page</button><button class="a-btn a-btn-sm a-btn-ghost" data-act="open-couple">Open couple’s view</button></div></div>
+        <p class="a-muted">Event ${esc(C.formatLong(c.weddingDate))} · RSVP by ${esc(C.formatLong(c.deadline))} <span class="a-pill ${cls}">${label}</span></p></div>
+        <div class="a-row"><button class="a-btn a-btn-sm a-btn-ghost" data-act="open-guest">Open RSVP page</button><button class="a-btn a-btn-sm a-btn-ghost" data-act="open-couple">Open client’s view</button></div></div>
       <nav class="a-tabs" aria-label="Client sections">${TABS.map(([k, l]) => `<button data-act="tab" data-tab="${k}" class="${B.tab === k ? 'is-on' : ''}" ${B.tab === k ? 'aria-current="page"' : ''}>${l}</button>`).join('')}</nav>
       ${B.pending ? '<div class="a-banner a-banner-info"><span>New RSVP answers came in. They will show after you save or cancel.</span></div>' : ''}
       <div class="a-tab-body">${body}</div>`;
@@ -3077,7 +3083,7 @@ guest: function () {
     const c = U.counts(r), open = B.expanded.has(r.id), over = r.guests.length > r.seats;
     return `<tr class="${r.sample ? 'is-example' : ''} ${open ? 'is-open' : ''}">
       <td data-label="Family or Group Name"><button class="a-family" data-act="toggle" data-id="${r.id}" aria-expanded="${open}"><span class="a-chev" aria-hidden="true">${open ? '▾' : '▸'}</span>${esc(r.family)}</button>
-        ${r.sample ? '<span class="a-pill a-pill-example">Example</span>' : ''}${r.addedBy === 'couple' ? '<span class="a-pill">Added by the couple</span>' : ''}${over ? `<span class="a-pill a-pill-warn">${r.guests.length} guests for ${r.seats} seat${r.seats === 1 ? '' : 's'}</span>` : ''}</td>
+        ${r.sample ? '<span class="a-pill a-pill-example">Example</span>' : ''}${r.addedBy === 'couple' ? '<span class="a-pill">Added by the client</span>' : ''}${over ? `<span class="a-pill a-pill-warn">${r.guests.length} guests for ${r.seats} seat${r.seats === 1 ? '' : 's'}</span>` : ''}</td>
       <td data-label="Reserved Seats">${r.seats}</td>
       <td data-label="Attending"><span class="a-num yes">${c.attending}</span></td>
       <td data-label="Not Attending"><span class="a-num no">${c.not_attending}</span></td>
@@ -3145,7 +3151,7 @@ guest: function () {
     const groups = u ? C.groupRows(u.rows) : [];
     const guests = groups.reduce((a, g) => a + g.guests.length, 0);
     return `<h2 class="a-h2">Upload RSVP list</h2>
-      <p class="a-muted">Upload the couple’s guest list and every family gets its own reservation and RSVP link. Use a spreadsheet saved as <strong>CSV</strong> (in Excel or Google Sheets: File → Download / Save as → CSV). One row per guest.</p>
+      <p class="a-muted">Upload the client’s guest list and every family gets its own reservation and RSVP link. Use a spreadsheet saved as <strong>CSV</strong> (in Excel or Google Sheets: File → Download / Save as → CSV). One row per guest.</p>
       <div class="a-panel a-stack">
         <div class="a-upload-cols"><div><p><strong>Columns</strong></p><ul class="a-small a-tight"><li><strong>Family</strong>: family or group name (required)</li><li><strong>Guest</strong>: guest’s full name (required)</li><li><strong>Seats</strong>: reserved seats for the family (optional, defaults to the number of guests)</li><li><strong>Status</strong>: Attending / Not Attending (optional)</li></ul>
           <button class="a-btn a-btn-ghost a-btn-sm" data-act="template">Download a sample file</button></div>
@@ -3172,18 +3178,18 @@ guest: function () {
     return `<h2 class="a-h2">RSVP Links</h2>
       <div class="a-panel a-stack">
         ${linkRow('Guest RSVP page', 'One link for everyone. Guests search their name to find their family.', guestLink, 'open-guest')}
-        ${linkRow('Couple’s view', 'Private tracker for the couple. They sign in with their 6-number code.', coupleLink, 'open-couple')}
-        <div class="a-link-row a-link-code"><div><p class="a-link-label">Couple’s code</p>
-          <p class="a-muted a-small">${B.newCode ? `New code: <strong class="a-code">${esc(B.newCode)}</strong>. Send it to the couple now. For safety it won’t be shown again.` : c.hasCode ? 'A code is set. You can give the couple a new one any time.' : 'No code yet, so the couple can’t sign in.'}</p></div>
-          <form class="a-inline-row" data-form="code" novalidate><input name="code" inputmode="numeric" maxlength="6" placeholder="New 6-number code" aria-label="New couple code"><button class="a-btn a-btn-sm">Set code</button></form></div>
-        <form class="a-link-row" data-form="slug" novalidate><div><p class="a-link-label">Link name</p><p class="a-muted a-small">The part after /w/ and /couple/. Changing it stops old links from working.</p></div>
+        ${linkRow('Client’s view', 'Private tracker for the client. They sign in with their 6-number code.', coupleLink, 'open-couple')}
+        <div class="a-link-row a-link-code"><div><p class="a-link-label">Client’s code</p>
+          <p class="a-muted a-small">${B.newCode ? `New code: <strong class="a-code">${esc(B.newCode)}</strong>. Send it to the client now. For safety it won’t be shown again.` : c.hasCode ? 'A code is set. You can give the client a new one any time.' : 'No code yet, so the cliene can’t sign in.'}</p></div>
+          <form class="a-inline-row" data-form="code" novalidate><input name="code" inputmode="numeric" maxlength="6" placeholder="New 6-number code" aria-label="New client code"><button class="a-btn a-btn-sm">Set code</button></form></div>
+        <form class="a-link-row" data-form="slug" novalidate><div><p class="a-link-label">Link name</p><p class="a-muted a-small">The part after /w/ and /couple/ in the links. Changing it stops old links from working.</p></div>
           <div class="a-inline-row"><input name="slug" value="${esc(c.slug)}" aria-label="Link name" maxlength="40"><button class="a-btn a-btn-sm a-btn-ghost">Save</button></div></form>
       </div>
       <div class="a-page-head a-mt"><div><h2 class="a-h2">Family links</h2><p class="a-muted">Personal links skip the name search and open the family’s reservation directly.</p></div>
         ${real.length ? '<div class="a-row"><button class="a-btn a-btn-ghost" data-act="links-csv">Download all (CSV)</button><button class="a-btn" data-act="links-copy">Copy all links</button></div>' : ''}</div>
       ${real.length ? `<div class="a-panel"><ul class="a-family-links">${real.map(r => `<li><span><strong>${esc(r.family)}</strong><code class="a-url">${esc(P.link('/r/' + r.token))}</code></span>
         <button class="a-btn a-btn-sm a-btn-ghost" data-act="copy-family" data-id="${r.id}">Copy</button></li>`).join('')}</ul></div>` : '<p class="a-muted">Add or upload guests to generate family links.</p>'}
-      <div class="a-panel a-mt a-danger-zone"><div><p class="a-link-label">Delete this client</p><p class="a-muted a-small">Removes the RSVP page, couple’s view, guest list and every answer.</p></div>
+      <div class="a-panel a-mt a-danger-zone"><div><p class="a-link-label">Delete this client</p><p class="a-muted a-small">Removes the RSVP page, client’s view, guest list and every answer.</p></div>
         <button class="a-btn a-btn-danger a-btn-sm" data-act="delete-client">Delete client</button></div>`;
   }
 
@@ -3221,11 +3227,13 @@ guest: function () {
     return `<div class="a-customize">
       <form class="a-stack" data-form="theme" novalidate>
         <section class="a-panel a-stack"><h3 class="a-h3">RSVP design</h3>
-          <p class="a-muted a-small">Choose which RSVP pages this couple’s guests see.</p>
+          <p class="a-muted a-small">Choose which RSVP pages this client’s guests see.</p>
           <div class="a-designs">${Object.entries(m.rsvpDesigns || { classic: 'Classic Garden', fairy: 'Fairy Garden' }).map(([k, l]) => `<button type="button" class="a-design-tile ${(t.rsvpDesign || 'classic') === k ? 'is-on' : ''}" data-act="rsvp-design" data-d="${k}" aria-pressed="${(t.rsvpDesign || 'classic') === k}">
             <span class="a-design-thumb" data-d="${k}" style="background-image:url('${esc(k === 'fairy' ? P.fairy('fairy-card-rsvp.webp') : P.bg)}')"></span><span>${esc(l)}</span></button>`).join('')}</div>
-          <label class="a-field"><span>Invitation link (for the “Back to Invitation” buttons)</span><input data-theme="invitationLink" type="url" value="${esc(t.invitationLink || '')}" placeholder="https://… link to the couple’s e-invitation" maxlength="500"></label>
+          <label class="a-field"><span>Invitation link (for the “Back to Invitation” buttons)</span><input data-theme="invitationLink" type="url" value="${esc(t.invitationLink || '')}" placeholder="https://… link to the client’s e-invitation" maxlength="500"></label>
           <p class="a-muted a-small">Used in the Fairy Garden design. Leave it empty to hide those buttons.</p>
+          <label class="a-field"><span>“Hello! What’s your name?” card size: <strong class="a-range-val">${esc(String(t.fairyNameSize || 100))}%</strong></span><input data-theme="fairyNameSize" type="range" min="60" max="160" step="5" value="${esc(String(t.fairyNameSize || 100))}"></label>
+          <p class="a-muted a-small">100% is the size in your design. The card keeps its look at any size; on phones it never gets wider than the screen.</p>
         </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Color palette</h3>
           <div class="a-swatches">${Object.entries(m.palettes).map(([k, p]) => sw(k, p)).join('')}</div>
@@ -3233,7 +3241,7 @@ guest: function () {
         </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Fonts</h3>
           <p class="a-muted a-small">Elegant fonts, the same families you’ll find in Canva. Have a font file of your own? Upload it below and pick “${esc(m.customFont)}”.</p>
-          <div class="a-font-group">${fontSelect('scriptFont', 'Names (couple, family, “See you soon!”)', 'Script & calligraphy')}
+          <div class="a-font-group">${fontSelect('scriptFont', 'Names (host, family, “See you soon!”)', 'Script & calligraphy')}
             <div class="a-font-adjust">${slider('sizes.names', 'Size', 60, 160)}${effectSelect('names', 'Effect')}</div></div>
           <div class="a-font-group">${fontSelect('headingFont', 'Titles', 'Elegant serif & display')}
             <div class="a-font-adjust">${slider('sizes.titles', 'Size', 60, 160)}${effectSelect('titles', 'Effect')}</div>
@@ -3251,8 +3259,8 @@ guest: function () {
           ${slider('cardSize.desktop', 'On computers', 70, 120)}
           ${slider('cardSize.mobile', 'On phones', 70, 120)}
         </section>
-        <section class="a-panel a-stack"><h3 class="a-h3">Couple photo</h3>
-          <p class="a-muted a-small">Shown on this couple’s card in the Client Tracker and at the top of their couple’s view. Guests don’t see it.</p>
+        <section class="a-panel a-stack"><h3 class="a-h3">Client photo</h3>
+          <p class="a-muted a-small">Shown on this client’s card in the Client Tracker and at the top of their client’s view. Guests don’t see it.</p>
           <div class="a-media-row">
             <span class="a-cover-thumb">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : '<span class="a-muted a-small">No photo</span>'}</span>
             <div class="a-stack">
@@ -3262,7 +3270,7 @@ guest: function () {
           </div>
         </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Logo</h3>
-          <p class="a-muted a-small">Shown on the invitation and thank-you cards. Without one, a flower wreath with the couple’s initials is used.</p>
+          <p class="a-muted a-small">Shown on the invitation and thank-you cards. Without one, a flower wreath with the client’s initials is used.</p>
           <div class="a-media-row">
             <span class="a-logo-thumb">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : P.monogram(B.client.site.couple, 'a-logo-mono')}</span>
             <div class="a-stack">
@@ -3352,7 +3360,7 @@ guest: function () {
   const SECTIONS = [
     ['Welcome Screen', 'The first page guests see.', [['welcomeEyebrow', 'Small heading above the title'], ['welcomeTitle', 'Title'], ['welcomeMessage', 'Message', 'area'], ['welcomeButton', 'Button label']]],
     ['RSVP Deadline Notice', 'Shown right after the welcome screen.', [['deadline', 'RSVP deadline date', 'date'], ['noticeEyebrow', 'Small heading'], ['noticeTitle', 'Title'], ['noticeMessage', 'Message', 'area'], ['noticeContact', 'What happens after the deadline', 'area'], ['noticeClosing', 'Closing line'], ['noticeButton', 'Button label']]],
-    ['Wedding Invitation', 'Names, date, and the name search.', [['couple', 'Couple’s names'], ['weddingDate', 'Wedding date', 'date'], ['invitationHeading', 'Small heading above the names'], ['inviteQuestion', 'Question under the date'], ['searchInstructions', 'Guest search instructions', 'area'], ['searchPlaceholder', 'Example inside the search box'], ['searchButton', 'Search button label']]],
+    ['Event Invitation', 'Names, date, and the name search.', [['couple', 'Host or celebrant name(s)'], ['weddingDate', 'Event date', 'date'], ['invitationHeading', 'Small heading above the names'], ['inviteQuestion', 'Question under the date'], ['searchInstructions', 'Guest search instructions', 'area'], ['searchPlaceholder', 'Example inside the search box'], ['searchButton', 'Search button label']]],
     ['Family Page', 'Family name and seats are filled in automatically.', [['greeting', 'Greeting (above the family name)', 'area'], ['seatsLabel', 'Label under the seat number'], ['onlyListedNote', 'Note about who is included', 'area']]],
     ['Guest Answers', 'The answer and recap part.', [['confirmTitle', 'Title above the guest names'], ['responseInstructions', 'Response instructions', 'area'], ['attendingLabel', 'Attending button'], ['notAttendingLabel', 'Not Attending button'], ['reviewTitle', 'Recap title'], ['reviewSubtitle', 'Recap note'], ['attendingGroupLabel', 'Heading for guests attending'], ['notAttendingGroupLabel', 'Heading for guests not attending'], ['submitButton', 'Submit button'], ['adultsOnly', 'Adults-only notice', 'area']]],
     ['Thank-You Screen', 'Shown after a guest sends their RSVP.', [['thanksEyebrow', 'Small line above the heading'], ['thanksHeading', 'Heading'], ['thanksMessage', 'Message', 'area'], ['thanksClosing', 'Closing']]],
@@ -3480,7 +3488,7 @@ guest: function () {
       <div class="d-side">
         <section class="a-panel a-stack">
           <h3 class="a-h3">Design your RSVP</h3>
-          <p class="a-muted a-small">Like Canva: add your own elements and text, then drag, resize, turn and layer them. It’s saved per couple and looks the same on phones.</p>
+          <p class="a-muted a-small">Like Canva: add your own elements and text, then drag, resize, turn and layer them. It’s saved per client and looks the same on phones.</p>
           <div class="a-seg a-seg-sm d-screens" role="group" aria-label="Screen">${D_SCREENS.map(([s, l]) => `<button type="button" data-act="d-screen" data-s="${s}" aria-pressed="${k === s}">${l}${d[s].length ? ` <small>${d[s].length}</small>` : ''}</button>`).join('')}</div>
           <div class="d-row"><button type="button" class="a-btn a-btn-sm" data-act="d-text">+ Add text</button>
             <button type="button" class="a-btn a-btn-ghost a-btn-sm" data-act="d-undo" ${(B.dUndo || []).length ? '' : 'disabled'}>↶ Undo</button>
@@ -3726,7 +3734,7 @@ guest: function () {
       case 'export': return U.download(c.slug + '-guest-list.csv', 'Family,Guest,Seats,Status\n' + c.reservations.filter(r => !r.sample).flatMap(r => r.guests.map(g => [r.family, g.name, r.seats, U.STATUS_TEXT[g.status]].map(csvCell).join(','))).join('\n'));
       case 'template': return U.download('rsvp-guest-list-sample.csv', 'Family,Guest,Seats,Status\nVillarin Family,John Wendren Villarin,3,\nVillarin Family,Mary Rose Villarin,3,\nVillarin Family,Jane Villarin,3,\nSantos Family,Ana Santos,2,\nSantos Family,Ben Santos,2,\n');
       case 'delete-client': {
-        const yes = await U.confirm({ title: `Delete ${c.couple}?`, message: 'Their RSVP page, couple’s view, guest list and every answer will be removed. This can’t be undone.', yes: 'Yes, delete', no: 'Keep', danger: true });
+        const yes = await U.confirm({ title: `Delete ${c.couple}?`, message: 'Their RSVP page, client’s view, guest list and every answer will be removed. This can’t be undone.', yes: 'Yes, delete', no: 'Keep', danger: true });
         if (!yes) return;
         try { await api('DELETE', '/api/board/clients/' + c.id); B.client = null; B.view = 'tracker'; resetDrafts(); await loadList(); render(); U.toast(`${c.couple} was deleted.`); } catch (err) { U.toast(err.message, 'error'); }
         return;
@@ -3895,7 +3903,7 @@ guest: function () {
       catch (err) { U.toast(err.message, 'error'); }
       B.videoBusy = false; return themeChanged(true);
     }
-    if (el.dataset.theme) { const k = el.dataset.theme; B.themeDraft[k] = el.type === 'checkbox' ? el.checked : el.value; return themeChanged(false); }
+    if (el.dataset.theme) { const k = el.dataset.theme; B.themeDraft[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? Number(el.value) : el.value; const out = el.type === 'range' && el.closest('label').querySelector('.a-range-val'); if (out) out.textContent = el.value + '%'; return themeChanged(false); }
   });
   // Drop a CSV on the upload box.
   app.addEventListener('dragover', e => { if (e.target.closest('.a-drop')) { e.preventDefault(); e.target.closest('.a-drop').classList.add('is-over'); } });
@@ -3945,7 +3953,7 @@ guest: function () {
     if (kind === 'code') {
       const code = v('code');
       if (!/^\d{6}$/.test(code)) return U.toast('The code must be 6 numbers.', 'error');
-      if (await saveClient('PUT', '/details', { code }, 'New couple code saved.')) { B.newCode = code; render(); }
+      if (await saveClient('PUT', '/details', { code }, 'New client code saved.')) { B.newCode = code; render(); }
       return;
     }
     if (kind === 'slug') {
