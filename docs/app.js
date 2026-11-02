@@ -379,7 +379,7 @@
     return { palette: 'garden', colors: Object.assign({}, PALETTES.garden), headingFont: 'Italianno', headingItalic: false,
       bodyFont: 'Della Respira', scriptFont: 'Great Vibes', background: 'garden', customBg: null, blur: true, logo: null, video: null, customFont: null,
       sizes: { names: 100, titles: 100, text: 100 }, effects: { names: 'none', titles: 'none' }, cardSize: { desktop: 100, mobile: 90 }, cover: null, decor: null,
-      rsvpDesign: 'classic', invitationLink: '', fairyNameSize: 100 };
+      rsvpDesign: 'classic', invitationLink: '', fairyRsvpSize: 100, fairyNameSize: 100, fairySurpriseSize: 100, fairyResSize: 100, fairyThanksSize: 100 };
   }
   function cleanTheme(body, old) {
     const t = Object.assign(defaultTheme(), old || {});
@@ -452,10 +452,12 @@
       if (v && (v.length > 500 || !/^https?:\/\/[^\s<>"']+$/i.test(v))) return { error: 'The invitation link must start with https:// (copy it from your browser’s address bar).' };
       t.invitationLink = v;
     }
-    if (body.fairyNameSize !== undefined) {
-      const n = Math.round(Number(body.fairyNameSize));
-      if (!(n >= 60 && n <= 160)) return { error: 'The Hello card size must be between 60% and 160%.' };
-      t.fairyNameSize = n;
+    // Fairy Garden: one size per card (100% = the size in the design).
+    for (const [k, label] of [['fairyRsvpSize', 'Kindly RSVP'], ['fairyNameSize', 'Hello'], ['fairySurpriseSize', 'Surprise'], ['fairyResSize', 'Reserved seats'], ['fairyThanksSize', 'Thank You']]) {
+      if (body[k] === undefined) continue;
+      const n = Math.round(Number(body[k]));
+      if (!(n >= 60 && n <= 160)) return { error: `The ${label} card size must be between 60% and 160%.` };
+      t[k] = n;
     }
     if (t.background === 'custom' && !t.customBg) return { error: 'Please upload a photo for the background first.' };
     return { theme: t };
@@ -2282,6 +2284,7 @@ guest: function () {
   const invite = () => (G.theme && G.theme.invitationLink) || '';
   const fBack = () => G.history.length && !['thanks', 'surprise'].includes(G.step) ? `<button type="button" class="f-back" data-act="back" aria-label="Go back to the previous screen">${icon('back', 'g-back-ic')}<span>Back</span></button>` : '';
   const fPage = (inner, cls) => `<div class="f-page ${cls || ''}"><div class="f-bg" aria-hidden="true" style="background-image:url('${esc(F('fairy-bg.jpg'))}')"></div>${banner()}${inner}</div>`;
+  const fSize = k => `--fs:${(Number(G.theme && G.theme[k]) || 100) / 100};`;
   const fCard = (img, cls, inner, css) => `<main class="f-stage f-card ${cls}" style="background-image:url('${esc(F(img))}');${css || ''}"><div class="f-in">${inner}</div></main>`;
   // Runs of capitals (like RSVP) get a little air, as in the design.
   const fcaps = html => html.replace(/(^|>)([^<]+)/g, (m, a, txt) => a + txt.replace(/[A-Z]{2,}/g, w => `<span class="f-caps">${w}</span>`));
@@ -2293,7 +2296,7 @@ guest: function () {
         <p class="f-hand f-sub">${rich('fairySubtitle')}</p>
         ${fparas('fairyMessage')}
         <p class="f-text f-closing">${rich('fairyClosing')}</p>
-        <button class="f-btn" data-act="f-next">${rich('fairyNext')}</button>`));
+        <button class="f-btn" data-act="f-next">${rich('fairyNext')}</button>`, fSize('fairyRsvpSize')));
     },
     invite() {
       return fPage(fCard('fairy-card-name.webp', 'f-card-name', `
@@ -2305,7 +2308,7 @@ guest: function () {
           <input id="g-name" name="name" autocomplete="name" placeholder="${t('fairyPlaceholder')}" required>
           ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
           <button class="f-btn" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Finding…' : t('fairyFind')}</button>
-        </form>`, `--fs:${(Number(G.theme.fairyNameSize) || 100) / 100}`));
+        </form>`, fSize('fairyNameSize')));
     },
     surprise() {
       const r = G.r, link = invite();
@@ -2314,7 +2317,7 @@ guest: function () {
         <p class="f-hand f-sub">${rich('fairySurpriseSub', r)}</p>
         <p class="f-text">${rich(r.submittedAt ? 'fairySurpriseDone' : 'fairySurpriseWait', r)}</p>
         ${link ? `<a class="f-btn" href="${esc(link)}" target="_top" rel="noopener">${rich('fairySurpriseButton', r)}</a>`
-          : `<button class="f-btn" data-act="f-again">${rich('fairySurpriseButton', r)}</button>`}`));
+          : `<button class="f-btn" data-act="f-again">${rich('fairySurpriseButton', r)}</button>`}`, fSize('fairySurpriseSize')));
     },
     reservation() {
       const r = G.r, me = G.who || r.repId;
@@ -2328,7 +2331,7 @@ guest: function () {
       const recap = (arr, yes) => arr.map(g => `<li class="${yes ? 'yes' : 'no'}${g.id === G.justAnswered ? ' is-new' : ''}"><span>${yes ? '✓' : '✕'}</span><span class="f-recap-name">${esc(g.name)}</span><span class="f-recap-st">${yes ? esc(C.fill(G.site.attendingLabel, G.site)) : esc(C.fill(G.site.notAttendingLabel, G.site))}</span></li>`).join('');
       const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
         : r.submittedAt ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
-      return fPage(`<main class="f-stage f-res">
+      return fPage(`<main class="f-stage f-res" style="${fSize('fairyResSize')}">
           <div class="f-res-body" style="${['l1', 'l2', 'l3', 'r1', 'r2', 'r3'].map(k => `--${k}:url('${esc(F('fairy-res-' + k + (k[1] === '2' ? '.png' : '.webp')))}')`).join(';')}">
             <div class="f-res-in">
               <p class="f-hand f-reserved">${rich('fairyReserved', r)}</p>
@@ -2351,7 +2354,7 @@ guest: function () {
       const link = invite(), word = C.fill(G.site.fairyThanks, G.site, G.r);
       // Small butterflies at half opacity drift around the words.
       const flies = Array.from({ length: 7 }, (_, i) => `<img class="f-fly" src="${esc(F('fairy-butterfly.webp'))}" alt="" style="--i:${i};--s:${[34, 26, 40, 22, 30, 24, 36][i]}px;--d:${[13, 16, 11, 18, 14, 17, 12][i]}s;--w:${-i * 1.7}s">`).join('');
-      return fPage(`<main class="f-stage f-thanks">
+      return fPage(`<main class="f-stage f-thanks" style="${fSize('fairyThanksSize')}">
           <div class="f-flies" aria-hidden="true">${flies}</div>
           <h1 class="g-sr">${esc(word)}</h1>
           ${G.site.fairyThanks === C.DEFAULT_SITE.fairyThanks ? `<img class="f-write-img" src="${esc(F('fairy-t-thanks.webp'))}" alt="" aria-hidden="true">` : `<svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
@@ -2504,7 +2507,7 @@ guest: function () {
     // The look can arrive before this page has finished loading; keep it and use it once ready.
     if (!G.site) { G.pendingTheme = e.data.theme; return; }
     if (!G.previewMode) return;
-    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || G.theme.fairyNameSize !== e.data.theme.fairyNameSize;
+    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || ['fairyRsvpSize', 'fairyNameSize', 'fairySurpriseSize', 'fairyResSize', 'fairyThanksSize'].some(k => G.theme[k] !== e.data.theme[k]);
     if (G.theme && G.theme.rsvpDesign !== e.data.theme.rsvpDesign) {
       const map = e.data.theme.rsvpDesign === 'fairy' ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
       if (map[G.step]) G.step = map[G.step];
@@ -3234,8 +3237,9 @@ guest: function () {
             <span class="a-design-thumb" data-d="${k}" style="background-image:url('${esc(k === 'fairy' ? P.fairy('fairy-card-rsvp.webp') : P.bg)}')"></span><span>${esc(l)}</span></button>`).join('')}</div>
           <label class="a-field"><span>Invitation link (for the “Back to Invitation” buttons)</span><input data-theme="invitationLink" type="url" value="${esc(t.invitationLink || '')}" placeholder="https://… link to the client’s e-invitation" maxlength="500"></label>
           <p class="a-muted a-small">Used in the Fairy Garden design. Leave it empty to hide those buttons.</p>
-          <label class="a-field"><span>“Hello! What’s your name?” card size: <strong class="a-range-val">${esc(String(t.fairyNameSize || 100))}%</strong></span><input data-theme="fairyNameSize" type="range" min="60" max="160" step="5" value="${esc(String(t.fairyNameSize || 100))}"></label>
-          <p class="a-muted a-small">100% is the size in your design. The card keeps its look at any size; on phones it never gets wider than the screen.</p>
+          <h4 class="a-h4">Fairy Garden card sizes</h4>
+          ${FAIRY_SIZES.map(([k, l]) => `<label class="a-field"><span>${l}: <strong class="a-range-val">${esc(String(t[k] || 100))}%</strong></span><input data-theme="${k}" type="range" min="60" max="160" step="5" value="${esc(String(t[k] || 100))}"></label>`).join('')}
+          <p class="a-muted a-small">100% is the size in your design. Each card grows or shrinks with all its text and pictures; on phones it never gets wider than the screen.</p>
         </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Color palette</h3>
           <div class="a-swatches">${Object.entries(m.palettes).map(([k, p]) => sw(k, p)).join('')}</div>
@@ -3260,6 +3264,7 @@ guest: function () {
           <p class="a-muted a-small">Makes the RSVP cards smaller or bigger. Phones and computers are set separately.</p>
           ${slider('cardSize.desktop', 'On computers', 70, 120)}
           ${slider('cardSize.mobile', 'On phones', 70, 120)}
+          ${(t.rsvpDesign || 'classic') === 'fairy' ? '<p class="a-muted a-small">Fairy Garden: 100% on computers and 90% on phones are the sizes in your design. Every card shrinks or grows with all its text and pictures.</p>' : ''}
         </section>
         <section class="a-panel a-stack"><h3 class="a-h3">Client photo</h3>
           <p class="a-muted a-small">Shown on this client’s card in the Client Tracker and at the top of their client’s view. Guests don’t see it.</p>
@@ -3302,7 +3307,7 @@ guest: function () {
           <button class="a-btn" ${B.busy ? 'disabled' : ''}>Save look</button>
         </div>
       </form>
-      <div class="a-customize-preview"><div class="a-seg a-seg-sm" role="group" aria-label="Preview screen">${[['welcome', 'Welcome'], ['invite', 'Invitation'], ['family', 'Family page']].map(([k, l]) => `<button type="button" data-act="look-screen" data-s="${k}" aria-pressed="${(B.lookScreen || 'welcome') === k}">${l}</button>`).join('')}</div>
+      <div class="a-customize-preview"><div class="a-seg a-seg-sm" role="group" aria-label="Preview screen">${[['welcome', 'Welcome'], ['invite', 'Invitation'], ['family', 'Family page']].concat((t.rsvpDesign || 'classic') === 'fairy' ? [['surprise', 'Surprise'], ['thanks', 'Thank you']] : []).map(([k, l]) => `<button type="button" data-act="look-screen" data-s="${k}" aria-pressed="${(B.lookScreen || 'welcome') === k}">${l}</button>`).join('')}</div>
         <div class="a-seg a-seg-sm a-look-device" role="group" aria-label="Screen size"><button type="button" data-act="look-device" data-d="mobile" aria-pressed="${B.lookDevice !== 'desktop'}">Phone</button><button type="button" data-act="look-device" data-d="desktop" aria-pressed="${B.lookDevice === 'desktop'}">Computer</button></div>
         <div class="a-frame ${B.lookDevice === 'desktop' ? 'a-frame-pc' : 'mobile'}" data-region="look-frame"><iframe title="Look preview" data-region="frame"></iframe></div></div>
     </div>`;
@@ -3407,6 +3412,8 @@ guest: function () {
       <p class="a-muted a-small a-preview-hint">The saved look, wording and guest list. Answers picked here are <strong>not saved</strong>.</p>
       <div class="a-frame ${B.previewDevice}"><iframe title="RSVP preview" data-region="frame"></iframe></div>`;
   }
+  // Fairy Garden size sliders: theme key, label, preview screen it shows.
+  const FAIRY_SIZES = [['fairyRsvpSize', '“Kindly RSVP!” card', 'welcome'], ['fairyNameSize', '“Hello! What’s your name?” card', 'invite'], ['fairyResSize', '“I Reserved … Seats” card', 'family'], ['fairySurpriseSize', '“Surprise! No Worries” card', 'surprise'], ['fairyThanksSize', '“Thank You!” page', 'thanks']];
   function loadFrame() {
     const f = app.querySelector('[data-region="frame"]'); if (!f) return;
     const c = B.client;
@@ -3414,7 +3421,7 @@ guest: function () {
     if (B.tab === 'customize') {
       f.addEventListener('load', sendTheme);
       const r = c.reservations[0], scr = B.lookScreen || 'welcome';
-      P.setFrame(f, scr === 'family' && r ? '/r/' + r.token + '?preview=1&step=reservation' : '/w/' + c.slug + '?preview=1' + (scr === 'invite' ? '&step=invite' : ''));
+      P.setFrame(f, ['family', 'surprise', 'thanks'].includes(scr) && r ? '/r/' + r.token + '?preview=1&step=' + (scr === 'family' ? 'reservation' : scr) : '/w/' + c.slug + '?preview=1' + (scr === 'invite' ? '&step=invite' : ''));
       paintVideoThumb(); fitLookFrame(); return;
     }
     P.setFrame(f, B.previewTarget ? '/r/' + B.previewTarget + '?preview=1&step=reservation' : '/w/' + c.slug + '?preview=1');
@@ -3821,10 +3828,11 @@ guest: function () {
     const el = e.target, bind = el.dataset.bind;
     if (B.tab === 'design' && B.view === 'client' && dInput(el)) return;
     // The Hello card size slider: show the Hello card in the preview and resize it while sliding.
-    if (el.dataset.theme === 'fairyNameSize') {
-      B.themeDraft.fairyNameSize = Number(el.value);
+    const sizeScreen = (FAIRY_SIZES.find(x => x[0] === el.dataset.theme) || [])[2];
+    if (sizeScreen) {
+      B.themeDraft[el.dataset.theme] = Number(el.value);
       const out = el.closest('label').querySelector('.a-range-val'); if (out) out.textContent = el.value + '%';
-      if (B.lookScreen !== 'invite') { B.lookScreen = 'invite'; app.querySelectorAll('[data-act="look-screen"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === 'invite')); loadFrame(); }
+      if (B.lookScreen !== sizeScreen) { B.lookScreen = sizeScreen; app.querySelectorAll('[data-act="look-screen"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.s === sizeScreen)); loadFrame(); }
       return themeChanged(false);
     }
     if (el.dataset.nest) {

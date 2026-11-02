@@ -536,6 +536,7 @@ body.admin:has(.a-savebar) .a-toast { bottom: 90px; }
 .a-colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
 .a-color { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; cursor: pointer; }
 .a-color input { width: 40px; height: 34px; padding: 0; border: 1px solid var(--taupe); border-radius: 8px; background: none; cursor: pointer; }
+.a-h4 { margin: 8px 0 0; font-size: 15px; font-weight: 700; }
 .a-font-sample { margin: 0; padding: 14px 16px; border-radius: 14px; background: var(--ivory); border: 1px dashed var(--taupe); text-align: center; font-family: var(--fs-b), serif; font-size: 17px; }
 .a-font-sample b { display: block; font-family: var(--fs-s), cursive; font-weight: 400; font-size: 38px; line-height: 1.25; color: #1f4d2c; }
 .a-font-select { font-size: 18px; }
@@ -1119,6 +1120,9 @@ body.x-editing [data-anim], body.x-editing .g-bg, body.x-editing .g-hero { anima
 
 
 /* ================= Fairy Garden RSVP design ================= */
+/* Card size sliders (Customize › Card size). On phones 90% is the design's own size. */
+body.is-fairy { --f-cz: var(--g-zoom-d, 1); }
+@media (max-width: 560px) { body.is-fairy { --f-cz: calc(var(--g-zoom-m, .9) / .9); } }
 body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose-dark: #b98284; --f-paper: #fef9f5; --f-line: #dcd8cf;
   --f-script: 'Homemade Apple', 'Caveat', cursive; --f-hand: 'Fuzzy Bubbles', 'Comic Neue', sans-serif; --f-serif: 'Gilda Display', 'Cormorant Garamond', serif;
   background: #fbf7ef; color: var(--f-text); }
@@ -1140,9 +1144,9 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 
 /* picture cards: the artwork is the card, the words sit in its open middle */
 .f-card { position: relative; background: center / 100% 100% no-repeat; container-type: inline-size; filter: drop-shadow(0 1px 6px rgba(70, 70, 30, .16)); }
-.f-card-rsvp { --k: calc(100cqw / 403); width: min(100%, max(403px, 29.5vw)); aspect-ratio: 403 / 536; translate: -1.9% 2%; }
-.f-card-name { --k: calc(100cqw / 419); width: min(100%, max(419px, 30.67vw) * var(--fs, 1)); aspect-ratio: 419 / 556; translate: 0 -.7%; }
-.f-card-surprise { --k: calc(100cqw / 448); width: min(100%, max(448px, 32.8vw)); aspect-ratio: 448 / 570; filter: none; }
+.f-card-rsvp { --k: calc(100cqw / 403); width: min(100%, min(100%, max(403px, 29.5vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 403 / 536; translate: -1.9% 2%; }
+.f-card-name { --k: calc(100cqw / 419); width: min(100%, min(100%, max(419px, 30.67vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 419 / 556; translate: 0 -.7%; }
+.f-card-surprise { --k: calc(100cqw / 448); width: min(100%, min(100%, max(448px, 32.8vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 448 / 570; filter: none; }
 .f-in { position: absolute; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .f-card-rsvp .f-in { left: calc(114 * var(--k)); width: calc(187 * var(--k)); top: calc(127 * var(--k)); }
 .f-card-rsvp .f-title { font-size: calc(32 * var(--k)); line-height: calc(40 * var(--k)); }
@@ -1170,7 +1174,7 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-card-surprise .f-btn { margin-top: calc(38 * var(--k)); min-width: calc(124 * var(--k)); height: calc(26 * var(--k)); padding: 0 calc(10 * var(--k)); font-size: calc(13.1 * var(--k)); }
 
 /* reservation: the whole design card; it grows with the guest list by stretching a plain strip of each side */
-.f-res { --k: calc(100cqw / 758); --w: min(max(758px, 55.5vw), 160vw); width: var(--w); container-type: inline-size; flex: none; align-self: flex-start; margin: 0 0 0 calc(50% - var(--w) / 2); }
+.f-res { --k: calc(100cqw / 758); --w: min(min(max(758px, 55.5vw) * var(--fs, 1), 160vw) * var(--f-cz, 1), 160vw); width: var(--w); container-type: inline-size; flex: none; align-self: flex-start; margin: 0 0 0 calc(50% - var(--w) / 2); }
 .f-page.f-page-res { overflow-x: hidden; padding-top: 39px; padding-bottom: 38px; }
 .f-res-body { position: relative; min-height: calc(1009 * var(--k)); box-sizing: border-box; padding: calc(190 * var(--k)) calc(216 * var(--k)) calc(178 * var(--k)) calc(241 * var(--k));
   background: var(--l1) left top / 50% auto no-repeat, var(--l3) left bottom / 50% auto no-repeat, var(--l2) left 0 top calc(554 * var(--k)) / 50% calc(100% - 1007 * var(--k) + 2px) no-repeat,
@@ -1207,7 +1211,7 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-res-in > .f-error { margin-top: calc(10 * var(--k)); }
 
 /* thank you: the words are written by hand while small butterflies flutter around */
-.f-thanks { --k: calc(max(100vw, 1100px) / 1366); position: relative; width: 100%; min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.f-thanks { --k: calc(max(100vw, 1100px) / 1366 * var(--fs, 1)); position: relative; width: 100%; min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .f-write-img { display: block; width: min(calc(100vw - 24px), calc(370 * var(--k))); margin-top: calc(37 * var(--k)); translate: calc(1.5 * var(--k)) 0;
   -webkit-mask-image: linear-gradient(90deg, #000 40%, transparent 60%); mask-image: linear-gradient(90deg, #000 40%, transparent 60%);
   -webkit-mask-size: 260% 100%; mask-size: 260% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: 100% 0; mask-position: 100% 0;
