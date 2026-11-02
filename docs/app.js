@@ -2429,7 +2429,15 @@ guest: function () {
     }
     return `<div class="g-el${flip}${on}" data-el="${esc(e.id)}" style="${style}"><img alt="" draggable="false" data-src="${esc(e.src)}">${handles}</div>`;
   }
+  // Design tab, Fairy Garden: the card itself is an element you can click and resize from its corner dot.
+  const F_SIZE_KEY = { notice: 'fairyRsvpSize', invite: 'fairyNameSize', surprise: 'fairySurpriseSize', reservation: 'fairyResSize', thanks: 'fairyThanksSize' };
+  function paintFairyHandle() {
+    const st = design && fairy() && F_SIZE_KEY[screenKey()] && app.querySelector('.f-stage'); if (!st) return;
+    st.classList.add('f-design'); st.classList.toggle('is-sel', D.sel === 'fairy-card');
+    if (!st.querySelector(':scope > .f-size-h')) st.insertAdjacentHTML('beforeend', '<span class="f-size-h" data-h="fsize" title="Drag to resize"></span>');
+  }
   function paintDecor() {
+    paintFairyHandle();
     const card = app.querySelector('.g-card'), k = screenKey();
     if (!card) return;
     card.querySelectorAll(':scope > .g-decor').forEach(x => x.remove());
@@ -2456,11 +2464,24 @@ guest: function () {
   function select(id) {
     D.sel = id;
     app.querySelectorAll('.g-el').forEach(x => x.classList.toggle('is-sel', x.dataset.el === id));
+    const st = app.querySelector('.f-stage.f-design'); if (st) st.classList.toggle('is-sel', id === 'fairy-card');
   }
   if (design) {
     document.body.classList.add('g-designing');
     app.addEventListener('pointerdown', e => {
-      const node = e.target.closest('.g-el');
+      const node = e.target.closest('.g-el'), fst = !node && e.target.closest('.f-stage.f-design');
+      if (fst) {
+        e.preventDefault();
+        if (D.sel !== 'fairy-card') { select('fairy-card'); window.parent.postMessage({ type: 'pixie-fairy-select', on: true }, '*'); }
+        if (e.target.dataset.h !== 'fsize') return;
+        const key = F_SIZE_KEY[screenKey()], v0 = Number(G.theme[key]) || 100, r = fst.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2, d0 = Math.hypot(e.clientX - cx, e.clientY - cy) || 1;
+        let v = v0; const h = e.target; h.setPointerCapture(e.pointerId);
+        const move = ev => { v = Math.round(Math.min(160, Math.max(60, v0 * Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0))); fst.style.setProperty('--fs', v / 100); };
+        const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); if (v !== v0) window.parent.postMessage({ type: 'pixie-fairy-size', key, value: v }, '*'); };
+        h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+        return;
+      }
       if (!node) { if (D.sel) { select(null); tell({ type: 'pixie-decor-select', id: null }); } return; }
       e.preventDefault();
       const item = decorList().find(x => x.id === node.dataset.el); if (!item) return;
@@ -3428,6 +3449,7 @@ guest: function () {
   }
 
   // ---------- Design (Canva-style): place your own elements and text on each guest screen ----------
+  const D_FAIRY_KEY = { welcome: 'fairyRsvpSize', notice: 'fairyRsvpSize', invite: 'fairyNameSize', reservation: 'fairyResSize', thanks: 'fairyThanksSize' };
   const D_SCREENS = [['welcome', 'Welcome'], ['notice', 'Heads-up'], ['invite', 'Invitation'], ['reservation', 'Family page'], ['thanks', 'Thank you']];
   const D_HIDE = [['glow', 'Step dots at the top'], ['icon', 'Icon and logo'], ['eyebrow', 'Small heading above the title'], ['foot', '“With Love by Pixie Craft Studio”']];
   const D_LAYERS = [['front', 'In front of everything'], ['under', 'Under the words'], ['behind', 'Behind the card']];
@@ -3470,6 +3492,11 @@ guest: function () {
   function dProps() {
     const e = dSelected();
     if (e && e.type === 'text') P.loadFonts(P.allFonts());
+    if (B.dSel === 'fairy-card') {
+      const k = D_FAIRY_KEY[B.dScreen || 'welcome'], v = B.themeDraft[k] || 100, l = (FAIRY_SIZES.find(x => x[0] === k) || [])[1] || 'Card';
+      return `<h3 class="a-h3">Selected: ${l}</h3><p class="a-muted a-small">Drag the corner dot on the card, or use the slider. 100% is the size in your design.</p>
+        <label class="a-slider d-slider"><span>Size</span><input type="range" min="60" max="160" step="1" value="${v}" data-fsize="${k}"><output>${v}%</output></label>`;
+    }
     if (!e) return `<h3 class="a-h3">Selected element</h3><p class="a-muted a-small">Click an element on the page to move it, resize it from the corner dot, or turn it with the top dot. Arrow keys nudge it.</p>`;
     const m = B.meta;
     const text = e.type === 'text' ? `
@@ -3577,7 +3604,12 @@ guest: function () {
   window.addEventListener('message', ev => {
     if (B.tab !== 'design' || B.view !== 'client' || !ev.data) return;
     const f = app.querySelector('[data-region="frame"]');
-    if (!f || ev.source !== f.contentWindow || ev.data.screen !== (B.dScreen || 'welcome')) return;
+    if (!f || ev.source !== f.contentWindow) return;
+    // Fairy Garden: the card itself was clicked or resized in the preview.
+    if (ev.data.type === 'pixie-fairy-select') { B.dSel = ev.data.on ? 'fairy-card' : null; return dRefresh(); }
+    if (ev.data.type === 'pixie-fairy-size' && FAIRY_SIZES.some(x => x[0] === ev.data.key)) { B.themeDraft[ev.data.key] = Math.min(160, Math.max(60, Math.round(Number(ev.data.value) || 100))); B.dSel = 'fairy-card'; return dChanged(true); }
+    if (ev.data.type === 'pixie-decor-select' && !ev.data.id && B.dSel === 'fairy-card') { B.dSel = null; return dRefresh(); }
+    if (ev.data.screen !== (B.dScreen || 'welcome')) return;
     const m = ev.data, list = dList();
     if (m.type === 'pixie-decor-select') { B.dSel = m.id; return dRefresh(); }
     const i = list.findIndex(e => e.id === (m.item ? m.item.id : m.id)); if (i < 0) return;
@@ -3640,7 +3672,7 @@ guest: function () {
       }
       case 'd-cancel': resetDrafts(); B.dSel = null; B.dUndo = []; B.dRedo = []; return render();
       case 'd-save': {
-        const out = await saveClient('PUT', '/theme', { theme: { decor: decor() } }, 'Your design is saved!');
+        const out = await saveClient('PUT', '/theme', { theme: Object.assign({ decor: decor() }, Object.fromEntries(FAIRY_SIZES.map(([k]) => [k, B.themeDraft[k] || 100]))) }, 'Your design is saved!');
         if (out) { B.dUndo = []; B.dRedo = []; }
         return;
       }
@@ -3826,6 +3858,7 @@ guest: function () {
 
   app.addEventListener('input', e => {
     const el = e.target, bind = el.dataset.bind;
+    if (el.dataset.fsize) { B.themeDraft[el.dataset.fsize] = Number(el.value); el.nextElementSibling.textContent = el.value + '%'; B.themeDirty = true; return dChanged(false); }
     if (B.tab === 'design' && B.view === 'client' && dInput(el)) return;
     // The Hello card size slider: show the Hello card in the preview and resize it while sliding.
     const sizeScreen = (FAIRY_SIZES.find(x => x[0] === el.dataset.theme) || [])[2];
