@@ -1061,6 +1061,10 @@ body.x-previewing .x-rail, body.x-previewing .x-fly { display: none; }
 
 /* Guests You Added: "Replied" and Remove side by side */
 .c-fam-end { display: inline-flex; align-items: center; gap: 16px; }
+.c-fam-edit { padding: 14px 16px; }
+.c-fam-edit .c-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.c-glink { font-size: 13px; white-space: nowrap; }
+.c-small { font-size: 13px; margin: 0; }
 
 /* ---------- motion (2026-10-29): entrances, reveals, counters, hover and press feedback ---------- */
 @keyframes m-rise { from { opacity: 0; transform: translateY(22px) scale(.985); } to { opacity: 1; transform: none; } }
@@ -1150,7 +1154,7 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 
 /* picture cards: the artwork is the card, the words sit in its open middle */
 .f-card { position: relative; background: center / 100% 100% no-repeat; container-type: inline-size; filter: drop-shadow(0 1px 6px rgba(70, 70, 30, .16)); }
-.f-card-rsvp { --k: calc(100cqw / 403); width: min(100%, min(100%, max(403px, 29.5vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 403 / 536; translate: -1.9% 2%; }
+.f-card-rsvp { --k: calc(100cqw / 403); width: min(100%, min(100%, max(403px, 29.5vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 403 / 536; translate: 2.55% -2.6%; }
 .f-card-name { --k: calc(100cqw / 419); width: min(100%, min(100%, max(419px, 30.67vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 419 / 556; translate: 0 -.7%; }
 .f-card-surprise { --k: calc(100cqw / 448); width: min(100%, min(100%, max(448px, 32.8vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 448 / 570; filter: none; }
 .f-in { position: absolute; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -1173,14 +1177,14 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-search input::placeholder { color: #b4ae9c; font-size: calc(9.6 * var(--k)); }
 .f-search input:focus { outline: none; box-shadow: 0 0 0 2px rgba(199, 146, 147, .45); }
 .f-card-name .f-btn { min-width: calc(124 * var(--k)); padding: 0; font-size: calc(12.2 * var(--k)); }
-.f-card-surprise .f-in { left: calc(168 * var(--k)); width: calc(220 * var(--k)); top: calc(169 * var(--k)); }
-.f-card-surprise .f-title { font-size: calc(37.7 * var(--k)); line-height: calc(60 * var(--k)); }
+.f-card-surprise .f-in { left: calc(168 * var(--k)); width: calc(220 * var(--k)); top: calc(190 * var(--k)); }
+.f-card-surprise .f-title { translate: calc(5.5 * var(--k)) 0; font-size: calc(37 * var(--k)); line-height: calc(60 * var(--k)); }
 .f-card-surprise .f-sub { translate: calc(-9 * var(--k)) 0; font-size: calc(19.4 * var(--k)); line-height: calc(22 * var(--k)); margin-top: calc(4 * var(--k)); }
-.f-card-surprise .f-text { font-size: calc(13.3 * var(--k)); line-height: calc(17 * var(--k)); margin-top: calc(21 * var(--k)); width: calc(185 * var(--k)); }
-.f-card-surprise .f-btn { margin-top: calc(38 * var(--k)); min-width: calc(124 * var(--k)); height: calc(26 * var(--k)); padding: 0 calc(10 * var(--k)); font-size: calc(13.1 * var(--k)); }
+.f-card-surprise .f-text { font-size: calc(12.4 * var(--k)); line-height: calc(17 * var(--k)); margin-top: calc(21 * var(--k)); width: calc(185 * var(--k)); }
+.f-card-surprise .f-btn { margin-top: calc(22 * var(--k)); min-width: calc(72 * var(--k)); height: calc(25.5 * var(--k)); padding: 0 calc(8 * var(--k)); font-size: calc(13.1 * var(--k)); }
 
 /* reservation: the whole design card; it grows with the guest list by stretching a plain strip of each side */
-.f-res { --k: calc(100cqw / 758); --w: min(min(max(758px, 55.5vw) * var(--fs, 1), 160vw) * var(--f-cz, 1), 160vw); width: var(--w); container-type: inline-size; flex: none; align-self: flex-start; margin: 0 0 0 calc(50% - var(--w) / 2); }
+.f-res { --k: calc(100cqw / 758); --w: min(min(max(758px, 55.5vw) * var(--fs, 1), 160vw) * var(--f-cz, 1), 160vw); width: var(--w); container-type: inline-size; flex: none; align-self: flex-start; margin: 0 0 0 calc(50% - var(--w) / 2); translate: calc(var(--w) * -19 / 758) 0; }
 .f-page.f-page-res { overflow-x: hidden; padding-top: 39px; padding-bottom: 38px; }
 .f-res-body { position: relative; min-height: calc(1009 * var(--k)); box-sizing: border-box; padding: calc(190 * var(--k)) calc(216 * var(--k)) calc(178 * var(--k)) calc(241 * var(--k));
   background: var(--l1) left top / 50% auto no-repeat, var(--l3) left bottom / 50% auto no-repeat, var(--l2) left 0 top calc(554 * var(--k)) / 50% calc(100% - 1007 * var(--k) + 2px) no-repeat,
@@ -1216,6 +1220,32 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-res-in > .f-btn { margin-top: calc(19 * var(--k)); min-width: calc(127 * var(--k)); translate: calc(7 * var(--k)) 0; }
 .f-res-in > .f-error { margin-top: calc(10 * var(--k)); }
 
+/* III. A Little Change of Plans? The pink paper sits between the back of the envelope and its front pocket.
+   Sizes are the design's pixels (envelope 406 x 460, paper 356 x 404) times --k. */
+.f-env { --k: calc(100cqw / 406); position: relative; container-type: inline-size; flex: none; width: min(100%, min(100%, max(406px, 29.72vw) * var(--fs, 1)) * var(--f-cz, 1)); aspect-ratio: 406 / 460; }
+.f-env-back, .f-env-front { position: absolute; inset: 0; background: var(--eb) center / 100% 100% no-repeat; }
+.f-env-front { background-image: var(--ef); z-index: 2; pointer-events: none; }
+.f-env-slot { position: absolute; left: 0; right: 0; top: calc(-120 * var(--k)); bottom: calc(6 * var(--k)); overflow: hidden; z-index: 1; pointer-events: none; }
+.f-paper { position: absolute; left: calc(25 * var(--k)); top: calc(96 * var(--k)); width: calc(356 * var(--k)); height: calc(404 * var(--k)); background: center / 100% 100% no-repeat; color: var(--f-ink); pointer-events: auto; }
+.f-paper > * { position: absolute; margin: 0; }
+.f-ctitle { left: 0; right: 0; top: calc(var(--ct-top, 30) * var(--k)); padding: 0 calc(60 * var(--k)); font-size: calc(var(--ct-fs, 26) * var(--k)); line-height: calc(37 * var(--k)); text-align: center; translate: calc(2.5 * var(--k)) 0; }
+.f-ctitle-img { left: calc(70 * var(--k)); top: calc(39 * var(--k)); width: calc(221 * var(--k)); }
+.f-ctitle-img img { display: block; width: 100%; height: auto; }
+.f-chello { left: 0; right: 0; top: calc(119 * var(--k)); font: 400 calc(19 * var(--k)) / 1 var(--f-serif); text-align: center; translate: calc(6.5 * var(--k)) 0; }
+.f-opts { left: calc(77 * var(--k)); top: calc(165 * var(--k)); display: flex; flex-direction: column; gap: calc(15 * var(--k)); }
+.f-opt { display: flex; align-items: center; gap: calc(21 * var(--k)); height: calc(19 * var(--k)); padding: 0; border: 0; background: none; color: inherit; cursor: pointer; text-align: left; }
+.f-opt:disabled { cursor: default; }
+.f-opt:focus-visible { outline: 2px solid var(--f-ink); outline-offset: 3px; border-radius: 6px; }
+.f-tog { position: relative; flex: none; width: calc(40 * var(--k)); height: calc(19 * var(--k)); border-radius: 99px; background: #e6e1cf; transition: background .3s; }
+.f-tog i { position: absolute; top: calc(1.5 * var(--k)); left: calc(1.5 * var(--k)); width: calc(16 * var(--k)); height: calc(16 * var(--k)); border-radius: 50%; background: #b5b0a2; transition: transform .3s cubic-bezier(.3, 1.4, .5, 1); }
+.f-tog.is-on { background: #fef9f5; } .f-tog.is-on i { transform: translateX(calc(21 * var(--k))); }
+.f-opt-t { font: 400 calc(16.5 * var(--k)) / 1 var(--f-serif); white-space: nowrap; translate: 0 calc(-1 * var(--k)); }
+.f-tulip { display: inline-block; width: calc(28 * var(--k)); height: calc(29 * var(--k)); vertical-align: middle; margin: calc(-8 * var(--k)) 0 calc(-8 * var(--k)) calc(var(--tu-x, -3) * var(--k)); translate: 0 calc(var(--tu-y, -2) * var(--k)); }
+.f-paper > .f-btn { left: calc(101 * var(--k)); top: calc(242 * var(--k)); width: calc(157 * var(--k)); height: calc(32 * var(--k)); min-width: 0; padding: 0; font-size: calc(16.6 * var(--k)); color: #fef9f5; }
+.f-paper > .f-error { left: calc(40 * var(--k)); right: calc(40 * var(--k)); top: calc(278 * var(--k)); font-size: calc(11 * var(--k)); line-height: 1.3; text-align: center; }
+.f-env.g-enter-first .f-paper, .f-env.g-enter-fwd .f-paper { animation: f-rise 1.4s .35s cubic-bezier(.22, .9, .3, 1) both; }
+@keyframes f-rise { from { transform: translateY(calc(380 * var(--k))); } to { transform: none; } }
+.f-res-in > .f-btn.f-mind { min-width: calc(var(--md-w, 140) * var(--k)); }
 /* thank you: the words are written by hand while small butterflies flutter around */
 .f-thanks { --k: calc(max(100vw, 1100px) / 1366 * var(--fs, 1)); position: relative; width: 100%; min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .f-write-img { display: block; position: relative; overflow: hidden; container-type: inline-size; width: min(calc(100vw - 24px), calc(370 * var(--k))); margin-top: calc(37 * var(--k)); translate: calc(1.5 * var(--k)) 0; }

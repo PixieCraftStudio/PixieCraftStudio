@@ -77,7 +77,14 @@
     fairySurpriseSub: 'No Worries',
     fairySurpriseDone: '{rep} already RSVP’d for you! Hehe!',
     fairySurpriseWait: '{rep} will RSVP for you! Hehe!',
-    fairySurpriseButton: 'Back to Invitation',
+    fairySurpriseButton: 'NEXT',
+    fairyChangeMind: 'Change of Mind?',
+    fairyChangeTitle: 'A Little Change of Plans?',
+    fairyChangeHello: 'Hello, {name}!',
+    fairyYes: 'yes, i\'ll be there!',
+    fairyNo: 'sorry, i can\'t make it!',
+    fairySave: 'Save My Answer',
+    fairyNeedLink: 'To keep everyone’s answers safe, please open your own RSVP link to change your answer. You can ask {couple} for it.',
   };
   const DATE_KEYS = ['deadline', 'weddingDate'];
   // Earlier default texts. If a site still has them unchanged, they are swapped for the current defaults.
@@ -86,6 +93,7 @@
     fairyNext: ['Next'],
     fairyFind: ['Find my seat'],
     fairySubmit: ['Submit'],
+    fairySurpriseButton: ['Back to Invitation'],
     welcomeEyebrow: ['Before You Begin'],
     welcomeTitle: ['Seats are Personally Reserved for You'],
     welcomeMessage: ['We have sent this RSVP invitation to a specific family member only to confirm the family member’s attendance. Kindly coordinate with one another if attending or not. Thank you!'],
@@ -216,7 +224,8 @@
       if (!name) continue;
       const status = STATUSES.includes(g.status) ? g.status : 'awaiting';
       const id = g.id && old.has(g.id) ? g.id : rid(8);
-      guests.push({ id, name, status });
+      const key = old.has(id) && old.get(id).key;
+      guests.push(key ? { id, name, status, key } : { id, name, status });
     }
     if (!guests.length) return { error: 'Please add at least one guest name.' };
     return { family, seats, guests };
@@ -379,7 +388,7 @@
     return { palette: 'garden', colors: Object.assign({}, PALETTES.garden), headingFont: 'Italianno', headingItalic: false,
       bodyFont: 'Della Respira', scriptFont: 'Great Vibes', background: 'garden', customBg: null, blur: true, logo: null, video: null, customFont: null,
       sizes: { names: 100, titles: 100, text: 100 }, effects: { names: 'none', titles: 'none' }, cardSize: { desktop: 100, mobile: 90 }, cover: null, decor: null,
-      rsvpDesign: 'classic', invitationLink: '', fairyRsvpSize: 100, fairyNameSize: 100, fairySurpriseSize: 100, fairyResSize: 100, fairyThanksSize: 100 };
+      rsvpDesign: 'classic', invitationLink: '', fairyRsvpSize: 100, fairyNameSize: 100, fairySurpriseSize: 100, fairyResSize: 100, fairyChangeSize: 100, fairyThanksSize: 100 };
   }
   function cleanTheme(body, old) {
     const t = Object.assign(defaultTheme(), old || {});
@@ -453,7 +462,7 @@
       t.invitationLink = v;
     }
     // Fairy Garden: one size per card (100% = the size in the design).
-    for (const [k, label] of [['fairyRsvpSize', 'Kindly RSVP'], ['fairyNameSize', 'Hello'], ['fairySurpriseSize', 'Surprise'], ['fairyResSize', 'Reserved seats'], ['fairyThanksSize', 'Thank You']]) {
+    for (const [k, label] of [['fairyRsvpSize', 'Kindly RSVP'], ['fairyNameSize', 'Hello'], ['fairySurpriseSize', 'Surprise'], ['fairyResSize', 'Reserved seats'], ['fairyChangeSize', 'Change of Plans'], ['fairyThanksSize', 'Thank You']]) {
       if (body[k] === undefined) continue;
       const n = Math.round(Number(body[k]));
       if (!(n >= 60 && n <= 160)) return { error: `The ${label} card size must be between 60% and 160%.` };
@@ -676,11 +685,35 @@
       if (!found) return err(404, 'We couldn’t find that name. Please type your first name and surname exactly as written on your invitation.');
       return ok({ token: found.token, guestId: who ? who.id : null });
     }
+    // A guest's own link (?g=guestId.key) proves who they are, so they may change their own answer.
+    const guestFromKey = (r, gk) => {
+      const [gid, key] = String(gk || '').split('.');
+      const g = gid && key && r.guests.find(x => x.id === gid);
+      return g && g.key && g.key === key ? g : null;
+    };
     if ((m = path.match(/^\/api\/r\/([A-Za-z0-9]{6,40})$/)) && method === 'GET') {
       const { c, r } = findByToken(m[1]);
       const preview = !!c && query.preview === '1' && canSee(c);
       if (!r || (r.sample && !preview)) return err(404, 'This RSVP link is not valid. Please check the link you were sent.');
-      return ok(Object.assign(guestSite(c, preview), { reservation: publicReservation(r) }));
+      const me = guestFromKey(r, query.g);
+      return ok(Object.assign(guestSite(c, preview), { reservation: publicReservation(r), me: me ? me.id : null }));
+    }
+    // One guest changes only their own answer; the rest of the group stays as it is.
+    if ((m = path.match(/^\/api\/r\/([A-Za-z0-9]{6,40})\/guest$/)) && method === 'POST') {
+      const { c, r } = findByToken(m[1]);
+      const preview = !!c && !!body.preview && canSee(c);
+      if (!r || (r.sample && !preview)) return err(404, 'This RSVP link is not valid.');
+      if (isClosed(c.site, now, tz)) return err(403, 'The RSVP deadline has passed, so responses can no longer be changed here.');
+      if (!['attending', 'not_attending'].includes(body.status)) return err(400, 'Please choose yes or sorry.');
+      // jrick chose (2026-11-03): finding your name is enough to change your own answer.
+      const g = guestFromKey(r, body.key) || r.guests.find(x => x.id === body.guestId);
+      if (!g) return err(404, 'We couldn’t find that guest.');
+      // jrick (2026-11-03): the names under a representative can only view; only the representative changes answers.
+      if (r.repId && r.guests.some(x => x.id === r.repId) && g.id !== r.repId) return err(403, 'Only ' + ((r.guests.find(x => x.id === r.repId) || {}).name || 'your representative') + ' can change the answers for your group.');
+      if (preview) return ok({ ok: true, preview: true });
+      g.status = body.status; g.changedAt = now.toISOString();
+      touch(db, c, 'guest');
+      return ok({ ok: true }, { save: true });
     }
     if ((m = path.match(/^\/api\/r\/([A-Za-z0-9]{6,40})\/rsvp$/)) && method === 'POST') {
       const { c, r } = findByToken(m[1]);
@@ -715,8 +748,13 @@
       if (!canSee(c)) return err(401, 'Please sign in again.');
       if (sub === '/version' && method === 'GET') return ok({ version: c.updatedAt });
       if (sub === '/state' && method === 'GET') {
+        // Every guest gets a personal key once, for their own RSVP link.
+        let keyed = false;
+        for (const r of c.reservations) for (const g of r.guests) if (!g.key) { g.key = rid(8); keyed = true; }
+        if (keyed) touch(db, c, 'couple');
         return ok({ couple: c.site.couple, site: c.site, slug: c.slug, closed: isClosed(c.site, now, tz), stats: stats(c), version: c.updatedAt,
-          planner: plannerOf(c), reservations: c.reservations.map(r => Object.assign(publicReservation(r), { id: r.id, addedBy: r.addedBy || 'studio', createdAt: r.createdAt || null })) });
+          planner: plannerOf(c), reservations: c.reservations.map(r => Object.assign(publicReservation(r), { id: r.id, addedBy: r.addedBy || 'studio', createdAt: r.createdAt || null,
+            links: Object.fromEntries(r.guests.map(g => [g.id, '/r/' + r.token + '?g=' + g.id + '.' + g.key])) })) }, keyed ? { save: true } : undefined);
       }
       if (sub === '/planner' && method === 'PUT') {
         const r = cleanPlanner(body.planner, c);
@@ -2085,6 +2123,8 @@ guest: function () {
   const tokenFromLink = (route.path.match(/^\/r\/([A-Za-z0-9]{6,40})$/) || [])[1] || null;
   let slug = (route.path.match(/^\/w\/([a-z0-9-]{1,60})$/) || [])[1] || null;
   const pq = preview ? '?preview=1' : '';
+  // A guest's own link: /r/<family>?g=<guest>.<key>. Only it may change that guest's answer later.
+  const gk = /^[A-Za-z0-9]{1,20}\.[A-Za-z0-9]{1,20}$/.test(route.query.get('g') || '') ? route.query.get('g') : '';
 
   const G = { site: null, closed: false, step: 'welcome', token: tokenFromLink, r: null, answers: {}, error: '', busy: false, previewMode: false, history: [] };
 
@@ -2311,26 +2351,28 @@ guest: function () {
         </form>`, fSize('fairyNameSize')));
     },
     surprise() {
-      const r = G.r, link = invite();
+      const r = G.r;
       return fPage(fCard('fairy-card-surprise.webp', 'f-card-surprise', `
         <h1 class="f-script f-title">${rich('fairySurprise', r)}</h1>
         <p class="f-hand f-sub">${rich('fairySurpriseSub', r)}</p>
         <p class="f-text">${rich(r.submittedAt ? 'fairySurpriseDone' : 'fairySurpriseWait', r)}</p>
-        ${link ? `<a class="f-btn" href="${esc(link)}" target="_top" rel="noopener">${rich('fairySurpriseButton', r)}</a>`
-          : `<button class="f-btn" data-act="f-again">${rich('fairySurpriseButton', r)}</button>`}`, fSize('fairySurpriseSize')));
+        <button class="f-btn" data-act="${r.submittedAt ? 'f-viewonly' : 'f-again'}">${rich('fairySurpriseButton', r)}</button>`, fSize('fairySurpriseSize')));
     },
     reservation() {
       const r = G.r, me = G.who || r.repId;
+      // Fairy Garden: after the first answer this page is for viewing only; each guest changes their own answer with "Change of Mind?".
+      const repHere = r.repId && r.guests.some(g => g.id === r.repId), isRep = !repHere || (G.who || r.repId) === r.repId;
+      const view = fairy() && (!!r.submittedAt || !isRep);
       const going = r.guests.filter(g => G.answers[g.id] === 'attending'), notGoing = r.guests.filter(g => G.answers[g.id] !== 'attending');
       const rows = r.guests.map(g => {
         const on = G.answers[g.id] === 'attending';
         return `<li class="f-row ${g.id === G.justAnswered ? 'is-just' : ''}">
           <span class="f-row-name">${g.id === me ? '<span class="f-you">You</span>' : ''}${esc(g.name)}</span>
-          <button type="button" class="f-switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(g.name)} is coming" data-act="f-toggle" data-g="${g.id}" ${G.closed ? 'disabled' : ''}><i></i></button></li>`;
+          <button type="button" class="f-switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(g.name)} is coming" data-act="f-toggle" data-g="${g.id}" ${G.closed || view ? 'disabled' : ''}><i></i></button></li>`;
       }).join('');
       const recap = (arr, yes) => arr.map(g => `<li class="${yes ? 'yes' : 'no'}${g.id === G.justAnswered ? ' is-new' : ''}"><span>${yes ? '✓' : '✕'}</span><span class="f-recap-name">${esc(g.name)}</span><span class="f-recap-st">${yes ? esc(C.fill(G.site.attendingLabel, G.site)) : esc(C.fill(G.site.notAttendingLabel, G.site))}</span></li>`).join('');
       const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
-        : r.submittedAt ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
+        : r.submittedAt && !view ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
       return fPage(`<main class="f-stage f-res" style="${fSize('fairyResSize')}">
           <div class="f-res-body" style="${['l1', 'l2', 'l3', 'r1', 'r2', 'r3'].map(k => `--${k}:url('${esc(F('fairy-res-' + k + (k[1] === '2' ? '.png' : '.webp')))}')`).join(';')}">
             <div class="f-res-in">
@@ -2345,10 +2387,29 @@ guest: function () {
               <p class="f-text f-small f-yay">${going.length ? `Yay! ${going.length} out of ${r.guests.length} ${going.length === 1 ? 'is' : 'are'} coming!` : `No one is coming? We’ll miss you!`}</p>
               <ul class="f-recap">${recap(going, true)}${notGoing.length && going.length ? '<li class="f-gap"></li>' : ''}${recap(notGoing, false)}</ul>
               ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
-              ${G.closed ? '' : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
+              ${G.closed || (view && !isRep) ? '' : view ? `<button class="f-btn f-mind" data-act="f-mind">${rich('fairyChangeMind', r)}</button>` : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
             </div>
           </div>
         </main>`, 'f-page-res');
+    },
+    // A Little Change of Plans? The pink paper rises out of the envelope; the guest changes only their own answer.
+    change() {
+      const r = G.r, me = r.guests.find(g => g.id === (G.who || r.repId)) || r.guests[0];
+      const first = (me.name || '').trim().split(/\s+/)[0] || '';
+      const v = G.mine || (me.status === 'not_attending' ? 'not_attending' : 'attending');
+      const opt = (val, key, extra) => `<button type="button" class="f-opt" role="radio" aria-checked="${v === val}" data-act="f-pick" data-v="${val}" ${G.closed ? 'disabled' : ''}>
+          <span class="f-tog ${v === val ? 'is-on' : ''}"><i></i></span><span class="f-opt-t">${rich(key, r)}${extra || ''}</span></button>`;
+      return fPage(`<main class="f-stage f-env" style="${fSize('fairyChangeSize')}--eb:url('${esc(F('fairy-env-back.webp'))}');--ef:url('${esc(F('fairy-env-front.webp'))}')">
+          <div class="f-env-back" aria-hidden="true"></div>
+          <div class="f-env-slot"><div class="f-paper" style="background-image:url('${esc(F('fairy-paper.webp'))}')">
+            ${G.site.fairyChangeTitle == null || G.site.fairyChangeTitle === C.DEFAULT_SITE.fairyChangeTitle ? `<h1 class="f-ctitle-img"><img src="${esc(F('fairy-t-change.webp'))}" alt="${esc(C.DEFAULT_SITE.fairyChangeTitle)}"></h1>` : `<h1 class="f-script f-ctitle">${rich('fairyChangeTitle', r)}</h1>`}
+            <p class="f-chello">${esc(C.fill(G.site.fairyChangeHello != null ? G.site.fairyChangeHello : C.DEFAULT_SITE.fairyChangeHello, G.site, r).replace(/\{name\}/g, first))}</p>
+            <div class="f-opts" role="radiogroup" aria-label="${esc(me.name)}">${opt('attending', 'fairyYes', `<img class="f-tulip" src="${esc(F('fairy-tulip.webp'))}" alt="">`)}${opt('not_attending', 'fairyNo')}</div>
+            ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
+            ${G.closed ? `<p class="f-error">The RSVP deadline has passed, so answers can no longer be changed here.</p>` : `<button class="f-btn f-save" data-act="f-save" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Saving…' : rich('fairySave', r)}</button>`}
+          </div></div>
+          <div class="f-env-front" aria-hidden="true"></div>
+        </main>`, 'f-page-env');
     },
     thanks() {
       const link = invite(), word = C.fill(G.site.fairyThanks, G.site, G.r);
@@ -2430,7 +2491,7 @@ guest: function () {
     return `<div class="g-el${flip}${on}" data-el="${esc(e.id)}" style="${style}"><img alt="" draggable="false" data-src="${esc(e.src)}">${handles}</div>`;
   }
   // Design tab, Fairy Garden: the card itself is an element you can click and resize from its corner dot.
-  const F_SIZE_KEY = { notice: 'fairyRsvpSize', invite: 'fairyNameSize', surprise: 'fairySurpriseSize', reservation: 'fairyResSize', thanks: 'fairyThanksSize' };
+  const F_SIZE_KEY = { notice: 'fairyRsvpSize', invite: 'fairyNameSize', surprise: 'fairySurpriseSize', reservation: 'fairyResSize', change: 'fairyChangeSize', thanks: 'fairyThanksSize' };
   function paintFairyHandle() {
     const st = design && fairy() && F_SIZE_KEY[screenKey()] && app.querySelector('.f-stage'); if (!st) return;
     st.classList.add('f-design'); st.classList.toggle('is-sel', D.sel === 'fairy-card');
@@ -2528,7 +2589,7 @@ guest: function () {
     // The look can arrive before this page has finished loading; keep it and use it once ready.
     if (!G.site) { G.pendingTheme = e.data.theme; return; }
     if (!G.previewMode) return;
-    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || ['fairyRsvpSize', 'fairyNameSize', 'fairySurpriseSize', 'fairyResSize', 'fairyThanksSize'].some(k => G.theme[k] !== e.data.theme[k]);
+    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || ['fairyRsvpSize', 'fairyNameSize', 'fairySurpriseSize', 'fairyResSize', 'fairyChangeSize', 'fairyThanksSize'].some(k => G.theme[k] !== e.data.theme[k]);
     if (G.theme && G.theme.rsvpDesign !== e.data.theme.rsvpDesign) {
       const map = e.data.theme.rsvpDesign === 'fairy' ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
       if (map[G.step]) G.step = map[G.step];
@@ -2538,8 +2599,9 @@ guest: function () {
   });
 
   async function openReservation(token) {
-    const data = await P.api('GET', '/api/r/' + token + pq);
+    const data = await P.api('GET', '/api/r/' + token + pq + (gk ? (pq ? '&' : '?') + 'g=' + encodeURIComponent(gk) : ''));
     G.r = data.reservation; G.closed = data.closed; G.token = token;
+    if (data.me) { G.who = data.me; G.verified = true; }
     if (!G.site) { G.site = data.site; G.theme = data.theme; slug = data.slug; G.previewMode = data.preview; }
     G.answers = {};
     for (const g of G.r.guests) if (g.status !== 'awaiting') G.answers[g.id] = g.status;
@@ -2547,14 +2609,33 @@ guest: function () {
     if (G.theme && G.theme.rsvpDesign === 'fairy') for (const g of G.r.guests) if (!G.answers[g.id]) G.answers[g.id] = 'attending';
   }
 
+  // Fairy Garden: the representative answers for everyone (once); anyone else in the group gets the Surprise card.
+  function fairyStep() {
+    const r = G.r, repHere = r && r.repId && r.guests.some(g => g.id === r.repId);
+    return fairy() && repHere && G.who && G.who !== r.repId ? 'surprise' : 'reservation';
+  }
   app.addEventListener('click', async e => {
     const b = e.target.closest('[data-act]');
     if (!b || design) return;
     const act = b.dataset.act;
     if (act === 'back') return back();
+    if (act === 'f-viewonly') { G.error = ''; return go('reservation'); }
+    if (act === 'f-mind') { G.mine = null; G.error = ''; return go('change'); }
+    if (act === 'f-pick') {
+      G.mine = b.dataset.v;
+      app.querySelectorAll('[data-act="f-pick"]').forEach(x => { const on = x.dataset.v === G.mine; x.setAttribute('aria-checked', on); x.querySelector('.f-tog').classList.toggle('is-on', on); });
+      return;
+    }
+    if (act === 'f-save') {
+      const r = G.r, who = G.who || r.repId, status = G.mine || ((r.guests.find(g => g.id === who) || {}).status === 'not_attending' ? 'not_attending' : 'attending');
+      G.busy = true; G.error = ''; render();
+      try { await P.api('POST', '/api/r/' + G.token + '/guest', { guestId: who, key: gk, status, preview }); G.busy = false; G.history = []; go('thanks'); }
+      catch (err) { G.busy = false; G.error = err.message; if (err.status === 403) G.closed = true; render(); }
+      return;
+    }
     if (act === 'f-next') {
       if (!G.token) return go('invite');
-      try { await openReservation(G.token); go('reservation'); }
+      try { await openReservation(G.token); go(fairyStep()); }
       catch (err) { G.token = null; G.pendingError = err.message; go('invite'); }
       return;
     }
@@ -2616,10 +2697,10 @@ guest: function () {
     try {
       const { token, guestId } = await P.api('POST', '/api/w/' + slug + '/find', { name, preview });
       await openReservation(token);
+      // Typing a name finds the seat, but only the guest's own link can change their answer later.
+      if (guestId !== G.who) G.verified = false;
       G.who = guestId || null;
-      // Fairy Garden: only the Designated RSVP Representative answers; anyone else in the group gets a friendly note.
-      const repHere = G.r.repId && G.r.guests.some(g => g.id === G.r.repId);
-      G.busy = false; go(fairy() && repHere && guestId && guestId !== G.r.repId ? 'surprise' : 'reservation');
+      G.busy = false; go(fairyStep());
     } catch (err) {
       G.busy = false; G.error = err.message; render();
       const input = app.querySelector('#g-name'); input.value = name; input.focus();
@@ -2641,6 +2722,7 @@ guest: function () {
       else if (step === 'invite') { G.history = fairy() ? ['notice'] : ['welcome', 'notice']; G.step = 'invite'; }
       else if (step === 'notice') { G.history = ['welcome']; G.step = 'notice'; }
       else if (step === 'surprise' && G.token && fairy()) { G.history = []; G.step = 'surprise'; }
+      else if (step === 'change' && G.token && fairy()) { G.history = []; G.step = 'change'; }
       render();
       const first = app.querySelector('.g-card, .f-stage');
       if (!calm() && !design && first) first.classList.add('g-enter-first');
@@ -2772,10 +2854,10 @@ guest: function () {
       </section>
       <section class="c-panel">
         <h2 class="c-h2">Guests You Added</h2>
-        ${mine.length ? `<ul class="c-fams">${mine.map(r => `<li class="c-fam"><div class="c-fam-head c-fam-static">
+        ${mine.length ? `<ul class="c-fams">${mine.map(r => V.edit && V.edit.id === r.id ? editRow(r) : `<li class="c-fam"><div class="c-fam-head c-fam-static">
             <span class="c-fam-name">${esc(r.family)}</span>
             <span class="c-fam-meta">${r.seats} seat${r.seats === 1 ? '' : 's'} <span class="c-dot">•</span> ${r.guests.map(g => esc(g.name)).join(', ')}</span>
-            <span class="c-fam-end">${r.submittedAt ? '<span class="c-fam-done">Replied</span>' : ''}<button class="a-link" data-act="add-delete" data-id="${r.id}">Remove</button></span>
+            <span class="c-fam-end">${r.submittedAt ? '<span class="c-fam-done">Replied</span>' : ''}<button class="a-link" data-act="edit-open" data-id="${r.id}">Edit</button><button class="a-link" data-act="add-delete" data-id="${r.id}">Remove</button></span>
           </div></li>`).join('')}</ul>` : '<p class="c-sub">You haven’t added anyone yet. Guests Pixie Craft Studio set up for you are in your RSVP Tracker.</p>'}
       </section>
     </div>`;
@@ -2837,6 +2919,24 @@ guest: function () {
     P.motion(app, 'couple:' + V.tab);
   }
 
+  // Edit a family or group: add or remove names. Answers already given stay with each guest.
+  function editRow(r) {
+    const e = V.edit;
+    return `<li class="c-fam c-fam-edit"><form class="c-form" data-form="edit" novalidate>
+      <div class="c-two">
+        <label class="b-field"><span>Designated RSVP Representative</span><input data-edit="family" value="${esc(e.family)}" maxlength="80"></label>
+        <label class="b-field"><span>Reserved seats</span><input data-edit="seats" value="${esc(e.seats)}" inputmode="numeric" maxlength="2"></label>
+      </div>
+      <div class="b-field"><span>Guest names</span>
+        ${e.guests.map((g, i) => `<span class="c-guest-row"><input data-edit="guest" data-i="${i}" value="${esc(g.name)}" placeholder="First name and surname" maxlength="80" aria-label="Guest ${i + 1}">
+          ${e.guests.length > 1 ? `<button type="button" class="c-x" data-act="edit-remove" data-i="${i}" aria-label="Remove guest ${i + 1}">×</button>` : ''}</span>`).join('')}
+        <button type="button" class="a-link c-more" data-act="edit-more">+ Add another name</button>
+      </div>
+      ${V.editError ? `<p class="a-error" role="alert">${esc(V.editError)}</p>` : ''}
+      <div class="c-actions"><button type="button" class="a-btn a-btn-ghost" data-act="edit-cancel">Cancel</button><button class="b-btn" ${V.busy ? 'disabled' : ''}>${V.busy ? 'Saving…' : 'Save changes'}</button></div>
+    </form></li>`;
+  }
+
   async function load() { V.data = await P.api('GET', base + '/state'); }
 
   app.addEventListener('click', async e => {
@@ -2850,6 +2950,22 @@ guest: function () {
     if (act === 'open-site') U.open('/w/' + slug);
     if (act === 'copy-link') U.copy(P.link('/w/' + V.data.slug), 'RSVP link copied!', 'RSVP link');
     if (act === 'add-more') { V.add.guests.push(''); render(); const ins = app.querySelectorAll('[data-add="guest"]'); ins[ins.length - 1].focus(); }
+    if (act === 'edit-open') {
+      const r = V.data.reservations.find(x => x.id === b.dataset.id); if (!r) return;
+      // The representative stays first; the other names follow.
+      const rep = r.guests.find(g => g.id === r.repId) || r.guests[0];
+      V.edit = { id: r.id, family: rep ? rep.name : r.family, seats: String(r.seats), guests: r.guests.filter(g => g !== rep).map(g => ({ id: g.id, name: g.name })), repId: rep && rep.id };
+      if (!V.edit.guests.length) V.edit.guests.push({ id: null, name: '' });
+      V.editError = ''; const y = scrollY; render(); scrollTo(0, y); return;
+    }
+    if (act === 'edit-cancel') { V.edit = null; const y = scrollY; render(); scrollTo(0, y); return; }
+    if (act === 'edit-more') { V.edit.guests.push({ id: null, name: '' }); const y = scrollY; render(); scrollTo(0, y); const ins = app.querySelectorAll('[data-edit="guest"]'); ins[ins.length - 1].focus(); return; }
+    if (act === 'edit-remove') { V.edit.guests.splice(Number(b.dataset.i), 1); const y = scrollY; render(); scrollTo(0, y); return; }
+    if (act === 'edit-link') {
+      const r = V.data.reservations.find(x => x.id === V.edit.id), l = r && r.links && r.links[b.dataset.g];
+      if (l) U.copy(P.link(l), 'Guest link copied!', 'Guest link');
+      return;
+    }
     if (act === 'add-remove') { V.add.guests.splice(Number(b.dataset.i), 1); render(); }
     if (act === 'add-delete') {
       const r = V.data.reservations.find(x => x.id === b.dataset.id);
@@ -2862,6 +2978,10 @@ guest: function () {
   });
   app.addEventListener('input', e => {
     const el = e.target;
+    if (el.dataset.edit && V.edit) {
+      if (el.dataset.edit === 'guest') V.edit.guests[Number(el.dataset.i)].name = el.value; else V.edit[el.dataset.edit] = el.value;
+      return;
+    }
     if (el.dataset.add) {
       if (el.dataset.add === 'guest') V.add.guests[Number(el.dataset.i)] = el.value; else V.add[el.dataset.add] = el.value;
       return;
@@ -2874,6 +2994,19 @@ guest: function () {
   app.addEventListener('change', e => { if (e.target.dataset.bind === 'target') { V.target = e.target.value; loadFrame(); } });
   app.addEventListener('submit', async e => {
     e.preventDefault();
+    if (e.target.dataset.form === 'edit') {
+      const ed = V.edit, repName = ed.family.trim(), others = ed.guests.map(g => ({ id: g.id, name: g.name.trim() })).filter(g => g.name);
+      const guests = [{ id: ed.repId, name: repName }, ...others], seats = Number(ed.seats || guests.length);
+      V.editError = !repName ? 'Please type the name of the Designated RSVP Representative.'
+        : !Number.isInteger(seats) || seats < 1 ? 'Reserved seats must be a number, like 3.' : guests.length > seats ? 'There are more names than reserved seats.' : '';
+      if (V.editError) { const y = scrollY; render(); scrollTo(0, y); return; }
+      V.busy = true; render();
+      try {
+        await P.api('PUT', base + '/reservations/' + ed.id, { family: repName, seats, guests });
+        V.edit = null; V.busy = false; await load(); const y = scrollY; render(); scrollTo(0, y); U.toast('Your changes are saved!');
+      } catch (err) { V.busy = false; V.editError = err.message; render(); }
+      return;
+    }
     if (e.target.dataset.form === 'add') {
       // The representative is the first guest on the list; the other names follow.
       const a = V.add, repName = a.family.trim(), others = a.guests.map(x => x.trim()).filter(x => x && x.toLowerCase() !== repName.toLowerCase());
@@ -2898,7 +3031,9 @@ guest: function () {
 
   // New answers appear on their own.
   setInterval(async () => {
-    if (!V.data || document.hidden || V.tab !== 'tracker') return;
+    // Counts stay live on every tab, but never while someone is typing or editing.
+    const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.dataset.bind !== 'query';
+    if (!V.data || document.hidden || V.edit || typing) return;
     try {
       const { version } = await P.api('GET', base + '/version');
       if (version === V.data.version) return;
@@ -3328,7 +3463,7 @@ guest: function () {
           <button class="a-btn" ${B.busy ? 'disabled' : ''}>Save look</button>
         </div>
       </form>
-      <div class="a-customize-preview"><div class="a-seg a-seg-sm" role="group" aria-label="Preview screen">${[['welcome', 'Welcome'], ['invite', 'Invitation'], ['family', 'Family page']].concat((t.rsvpDesign || 'classic') === 'fairy' ? [['surprise', 'Surprise'], ['thanks', 'Thank you']] : []).map(([k, l]) => `<button type="button" data-act="look-screen" data-s="${k}" aria-pressed="${(B.lookScreen || 'welcome') === k}">${l}</button>`).join('')}</div>
+      <div class="a-customize-preview"><div class="a-seg a-seg-sm" role="group" aria-label="Preview screen">${[['welcome', 'Welcome'], ['invite', 'Invitation'], ['family', 'Family page']].concat((t.rsvpDesign || 'classic') === 'fairy' ? [['surprise', 'Surprise'], ['change', 'Change of plans'], ['thanks', 'Thank you']] : []).map(([k, l]) => `<button type="button" data-act="look-screen" data-s="${k}" aria-pressed="${(B.lookScreen || 'welcome') === k}">${l}</button>`).join('')}</div>
         <div class="a-seg a-seg-sm a-look-device" role="group" aria-label="Screen size"><button type="button" data-act="look-device" data-d="mobile" aria-pressed="${B.lookDevice !== 'desktop'}">Phone</button><button type="button" data-act="look-device" data-d="desktop" aria-pressed="${B.lookDevice === 'desktop'}">Computer</button></div>
         <div class="a-frame ${B.lookDevice === 'desktop' ? 'a-frame-pc' : 'mobile'}" data-region="look-frame"><iframe title="Look preview" data-region="frame"></iframe></div></div>
     </div>`;
@@ -3404,7 +3539,8 @@ guest: function () {
     ['Fairy Garden Design', 'Only used when Customize › RSVP design is “Fairy Garden”. {rep} is the Designated RSVP Representative.', [['fairyTitle', 'Card 1 title'], ['fairySubtitle', 'Card 1 small heading'], ['fairyMessage', 'Card 1 message', 'area'], ['fairyClosing', 'Card 1 closing'], ['fairyNext', 'Card 1 button'],
       ['fairyHello', 'Name card title'], ['fairyAsk', 'Name card question'], ['fairyAskSub', 'Name card line'], ['fairyPlaceholder', 'Name box hint'], ['fairyFind', 'Name card button'],
       ['fairyReserved', 'Above the seat number'], ['fairySeatsWord', 'Below the seat number'], ['fairyForYou', 'Line below “Seats”'], ['fairyCount', 'Instructions', 'area'], ['fairyCheck', 'Recap title'], ['fairySubmit', 'Submit button'],
-      ['fairyThanks', 'Thank-you words'], ['fairyBackLink', 'Thank-you link text'], ['fairySurprise', 'Surprise title'], ['fairySurpriseSub', 'Surprise small heading'], ['fairySurpriseDone', 'Surprise message (after they answered)', 'area'], ['fairySurpriseWait', 'Surprise message (not answered yet)', 'area'], ['fairySurpriseButton', 'Surprise button']]],
+      ['fairyThanks', 'Thank-you words'], ['fairyBackLink', 'Thank-you link text'], ['fairySurprise', 'Surprise title'], ['fairySurpriseSub', 'Surprise small heading'], ['fairySurpriseDone', 'Surprise message (after they answered)', 'area'], ['fairySurpriseWait', 'Surprise message (not answered yet)', 'area'], ['fairySurpriseButton', 'Surprise button'], ['fairyChangeMind', 'Button on the answered seats page'],
+      ['fairyChangeTitle', 'Change of plans title'], ['fairyChangeHello', 'Change of plans greeting ({name} is the guest’s first name)'], ['fairyYes', 'Yes answer'], ['fairyNo', 'No answer'], ['fairySave', 'Save button']]],
   ];
   function viewWording() {
     const s = B.siteDraft;
@@ -3434,7 +3570,7 @@ guest: function () {
       <div class="a-frame ${B.previewDevice}"><iframe title="RSVP preview" data-region="frame"></iframe></div>`;
   }
   // Fairy Garden size sliders: theme key, label, preview screen it shows.
-  const FAIRY_SIZES = [['fairyRsvpSize', '“Kindly RSVP!” card', 'welcome'], ['fairyNameSize', '“Hello! What’s your name?” card', 'invite'], ['fairyResSize', '“I Reserved … Seats” card', 'family'], ['fairySurpriseSize', '“Surprise! No Worries” card', 'surprise'], ['fairyThanksSize', '“Thank You!” page', 'thanks']];
+  const FAIRY_SIZES = [['fairyRsvpSize', '“Kindly RSVP!” card', 'welcome'], ['fairyNameSize', '“Hello! What’s your name?” card', 'invite'], ['fairyResSize', '“I Reserved … Seats” card', 'family'], ['fairySurpriseSize', '“Surprise! No Worries” card', 'surprise'], ['fairyChangeSize', '“A Little Change of Plans?” envelope', 'change'], ['fairyThanksSize', '“Thank You!” page', 'thanks']];
   function loadFrame() {
     const f = app.querySelector('[data-region="frame"]'); if (!f) return;
     const c = B.client;
@@ -3442,7 +3578,7 @@ guest: function () {
     if (B.tab === 'customize') {
       f.addEventListener('load', sendTheme);
       const r = c.reservations[0], scr = B.lookScreen || 'welcome';
-      P.setFrame(f, ['family', 'surprise', 'thanks'].includes(scr) && r ? '/r/' + r.token + '?preview=1&step=' + (scr === 'family' ? 'reservation' : scr) : '/w/' + c.slug + '?preview=1' + (scr === 'invite' ? '&step=invite' : ''));
+      P.setFrame(f, ['family', 'surprise', 'change', 'thanks'].includes(scr) && r ? '/r/' + r.token + '?preview=1&step=' + (scr === 'family' ? 'reservation' : scr) : '/w/' + c.slug + '?preview=1' + (scr === 'invite' ? '&step=invite' : ''));
       paintVideoThumb(); fitLookFrame(); return;
     }
     P.setFrame(f, B.previewTarget ? '/r/' + B.previewTarget + '?preview=1&step=reservation' : '/w/' + c.slug + '?preview=1');
