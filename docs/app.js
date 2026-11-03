@@ -708,8 +708,7 @@
       // jrick chose (2026-11-03): finding your name is enough to change your own answer.
       const g = guestFromKey(r, body.key) || r.guests.find(x => x.id === body.guestId);
       if (!g) return err(404, 'We couldn’t find that guest.');
-      // jrick (2026-11-03): the names under a representative can only view; only the representative changes answers.
-      if (r.repId && r.guests.some(x => x.id === r.repId) && g.id !== r.repId) return err(403, 'Only ' + ((r.guests.find(x => x.id === r.repId) || {}).name || 'your representative') + ' can change the answers for your group.');
+      // jrick (2026-11-03): the names under a representative view the group's answers and may change only their own.
       if (preview) return ok({ ok: true, preview: true });
       g.status = body.status; g.changedAt = now.toISOString();
       touch(db, c, 'guest');
@@ -2387,7 +2386,7 @@ guest: function () {
               <p class="f-text f-small f-yay">${going.length ? `Yay! ${going.length} out of ${r.guests.length} ${going.length === 1 ? 'is' : 'are'} coming!` : `No one is coming? We’ll miss you!`}</p>
               <ul class="f-recap">${recap(going, true)}${notGoing.length && going.length ? '<li class="f-gap"></li>' : ''}${recap(notGoing, false)}</ul>
               ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
-              ${G.closed || (view && !isRep) ? '' : view ? `<button class="f-btn f-mind" data-act="f-mind">${rich('fairyChangeMind', r)}</button>` : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
+              ${G.closed ? '' : view ? `<button class="f-btn f-mind" data-act="f-mind">${rich('fairyChangeMind', r)}</button>` : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
             </div>
           </div>
         </main>`, 'f-page-res');
