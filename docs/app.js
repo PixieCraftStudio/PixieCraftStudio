@@ -279,7 +279,43 @@
   // Pictures the studio uploads as design elements (stickers, flowers, frames...): a file on the server, or kept in this browser in the single file.
   const IMAGE_REF = /^(\/media\/[A-Za-z0-9_-]{1,80}\.(png|jpg|webp|gif)|idb:[A-Za-z0-9]{6,40})$/;
   // Design (Canva-style) layer on each guest screen. Positions are in hundredths of the card's width, so a design keeps its shape on phones.
-  const DECOR_SCREENS = ['welcome', 'notice', 'invite', 'reservation', 'thanks'];
+  const DECOR_SCREENS = ['welcome', 'notice', 'invite', 'surprise', 'reservation', 'change', 'thanks'];
+  // Fairy Garden, Design tab (jrick 2026-11-04: "customize rsvp cards literally like canva"): every part of each card can be moved, resized,
+  // turned, recolored, hidden, and the card picture swapped. Nothing saved = the card exactly as in jrick's pictures.
+  // [part id, label, kind]; kind 'card' = the card picture, 'btn' = a button (has a fill color), 'text' = words, 'box' = other.
+  const FAIRY_PARTS = {
+    notice: [['card', 'Card picture', 'card'], ['title', 'Title', 'text'], ['sub', 'Small heading', 'text'], ['msg', 'Message', 'text'], ['closing', 'Closing line', 'text'], ['btn', 'Button', 'btn']],
+    invite: [['card', 'Card picture', 'card'], ['title', 'Title', 'text'], ['sub', 'Question', 'text'], ['text', 'Small words', 'text'], ['input', 'Name box', 'box'], ['btn', 'Button', 'btn']],
+    surprise: [['card', 'Card picture', 'card'], ['title', 'Title', 'text'], ['sub', 'Small heading', 'text'], ['text', 'Message', 'text'], ['btn', 'Button', 'btn']],
+    reservation: [['reserved', '“I reserved”', 'text'], ['num', 'Seat number', 'text'], ['seats', '“Seats”', 'text'], ['for', '“for you”', 'text'], ['count', 'Small words', 'text'], ['rows', 'Guest list', 'box'], ['check', 'Check heading', 'text'], ['yay', 'Who’s coming line', 'text'], ['recap', 'Answers list', 'box'], ['btn', 'Button', 'btn']],
+    change: [['card', 'Paper picture', 'card'], ['ctitle', 'Title', 'text'], ['chello', 'Hello line', 'text'], ['opts', 'Yes / No choices', 'box'], ['btn', 'Button', 'btn']],
+    thanks: [['write', 'Thank-you lettering', 'text'], ['link', 'Link below', 'text']],
+  };
+  function cleanParts(d, customFontOk) {
+    if (d === null || d === undefined) return { parts: null };
+    if (typeof d !== 'object' || Array.isArray(d)) return { error: 'The card edits could not be read. Please try again.' };
+    const out = {}, num = inRange, hex = v => /^#[0-9a-fA-F]{6}$/.test(v || '');
+    for (const [scr, list] of Object.entries(d)) {
+      if (!FAIRY_PARTS[scr] || !list || typeof list !== 'object') return { error: 'Unknown screen in the card edits.' };
+      for (const [id, p] of Object.entries(list)) {
+        const def = FAIRY_PARTS[scr].find(x => x[0] === id);
+        if (!def || !p || typeof p !== 'object') return { error: 'Unknown part of a card.' };
+        const o = {};
+        if (p.x !== undefined) { if (!num(p.x, -900, 900)) return { error: 'A part is moved too far off the card.' }; o.x = Math.round(p.x * 10) / 10; }
+        if (p.y !== undefined) { if (!num(p.y, -900, 1400)) return { error: 'A part is moved too far off the card.' }; o.y = Math.round(p.y * 10) / 10; }
+        if (p.s !== undefined) { if (!num(p.s, 0.2, 5)) return { error: 'A part’s size goes from 20% to 500%.' }; o.s = Math.round(p.s * 1000) / 1000; }
+        if (p.rot !== undefined) { if (!num(p.rot, -180, 180)) return { error: 'A part can turn up to 180°.' }; o.rot = Math.round(p.rot); }
+        if (p.op !== undefined) { if (!num(p.op, 0.05, 1)) return { error: 'See-through goes from 5% to 100%.' }; o.op = Math.round(p.op * 100) / 100; }
+        if (p.hide) o.hide = true;
+        if (p.color !== undefined) { if (!hex(p.color)) return { error: 'Colors must look like #c27390.' }; o.color = p.color.toLowerCase(); }
+        if (p.fill !== undefined) { if (def[2] !== 'btn' || !hex(p.fill)) return { error: 'Button colors must look like #c27390.' }; o.fill = p.fill.toLowerCase(); }
+        if (p.font !== undefined) { if (!(ALL_FONT_LIST.includes(p.font) || (p.font === CUSTOM_FONT && customFontOk))) return { error: 'Unknown font on a card.' }; o.font = p.font; }
+        if (p.src !== undefined) { if (def[2] !== 'card' || !IMAGE_REF.test(p.src)) return { error: 'Please choose the card picture again.' }; o.src = p.src; }
+        if (Object.keys(o).length) (out[scr] = out[scr] || {})[id] = o;
+      }
+    }
+    return { parts: Object.keys(out).length ? out : null };
+  }
   const DECOR_HIDE = ['glow', 'icon', 'eyebrow', 'foot'];
   const DECOR_LAYERS = ['front', 'under', 'behind'];
   function cleanDecor(d, customFontOk) {
@@ -453,6 +489,11 @@
       const d = cleanDecor(body.decor, !!t.customFont);
       if (d.error) return d;
       t.decor = d.decor;
+    }
+    if (body.parts !== undefined) {
+      const d = cleanParts(body.parts, !!t.customFont);
+      if (d.error) return d;
+      t.parts = d.parts;
     }
     if (body.background !== undefined) { if (!BACKGROUNDS[body.background]) return { error: 'Unknown background.' }; t.background = body.background; }
     if (body.rsvpDesign !== undefined) { if (!RSVP_DESIGNS[body.rsvpDesign]) return { error: 'Unknown RSVP design.' }; t.rsvpDesign = body.rsvpDesign; }
@@ -973,7 +1014,7 @@
   }
 
   return {
-    DEFAULT_SITE, STATUSES, PALETTES, RSVP_DESIGNS, FLOOR_ITEMS, TABLE_SHAPES, cleanPlanner, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
+    DEFAULT_SITE, STATUSES, PALETTES, RSVP_DESIGNS, FLOOR_ITEMS, TABLE_SHAPES, cleanPlanner, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, FAIRY_PARTS, cleanParts, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
     handle, stats, fill, isClosed, deadlineEnd, formatDeadline, formatWeddingDate, formatLong, formatPadded, validDate, normName,
   };
 });
@@ -2122,6 +2163,19 @@ guest: function () {
   const tokenFromLink = (route.path.match(/^\/r\/([A-Za-z0-9]{6,40})$/) || [])[1] || null;
   let slug = (route.path.match(/^\/w\/([a-z0-9-]{1,60})$/) || [])[1] || null;
   const pq = preview ? '?preview=1' : '';
+  // iPhone/iPad zoom into small text boxes when tapped (the name box). Stop that zoom there only; people can still pinch to zoom.
+  if (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp && !/maximum-scale/.test(vp.content)) vp.content += ', maximum-scale=1';
+  }
+  // jrick (2026-11-04): guest pages are portrait only on phones. Browsers can't lock rotation, so a sideways phone sees a "turn upright" screen.
+  if (!preview && !document.querySelector('.g-rotate')) {
+    const rot = document.createElement('div');
+    rot.className = 'g-rotate'; rot.setAttribute('role', 'alert');
+    rot.innerHTML = '<div class="g-rotate-in"><div class="g-rotate-phone" aria-hidden="true"></div><p>Please turn your phone upright</p></div>';
+    document.body.appendChild(rot);
+    try { screen.orientation && screen.orientation.lock && screen.orientation.lock('portrait').catch(() => {}); } catch (e) {}
+  }
   // A guest's own link: /r/<family>?g=<guest>.<key>. Only it may change that guest's answer later.
   const gk = /^[A-Za-z0-9]{1,20}\.[A-Za-z0-9]{1,20}$/.test(route.query.get('g') || '') ? route.query.get('g') : '';
 
@@ -2327,35 +2381,77 @@ guest: function () {
   const fCard = (img, cls, inner, css) => `<main class="f-stage f-card ${cls}" style="background-image:url('${esc(F(img))}');${css || ''}"><div class="f-in">${inner}</div></main>`;
   // Runs of capitals (like RSVP) get a little air, as in the design.
   const fcaps = html => html.replace(/(^|>)([^<]+)/g, (m, a, txt) => a + txt.replace(/[A-Z]{2,}/g, w => `<span class="f-caps">${w}</span>`));
+  // A card part the Design tab can edit: its saved look (move, size, turn, colors, font, hidden) goes on it inline.
+  const partOf = id => (G.theme && G.theme.parts && G.theme.parts[G.step] && G.theme.parts[G.step][id]) || null;
+  function partStyle(p) {
+    let st = '';
+    if (!p) return st;
+    if (p.x || p.y) st += `--px:${p.x || 0};--py:${p.y || 0};`;
+    if (p.s && p.s !== 1) st += `scale:${p.s};`;
+    if (p.rot) st += `rotate:${p.rot}deg;`;
+    if (p.op !== undefined && p.op !== 1) st += `opacity:${p.op};`;
+    if (p.color) st += `color:${p.color};--f-ink:${p.color};--f-text:${p.color};`;
+    if (p.fill) st += `background:${p.fill};`;
+    if (p.font) st += `font-family:'${esc(P.fontFamily(p.font))}';`;
+    return st;
+  }
+  const fp = (id, key) => {
+    const p = partOf(id), st = partStyle(p);
+    return `data-part="${id}"${key ? ` data-key="${key}"` : ''}${p && p.hide ? ' data-hide' : ''}${st ? ` style="${st}"` : ''}`;
+  };
+  // Live edits from the Design tab: restyle the parts in place, so nothing replays.
+  function restyleParts() {
+    if (!fairy()) return;
+    app.querySelectorAll('[data-part]').forEach(el => {
+      const p = partOf(el.dataset.part), st = partStyle(p);
+      if (st) el.setAttribute('style', st); else el.removeAttribute('style');
+      el.toggleAttribute('data-hide', !!(p && p.hide));
+    });
+    const fonts = Object.values((G.theme.parts && G.theme.parts[G.step]) || {}).map(p => p.font).filter(Boolean);
+    if (fonts.length) P.loadFonts(fonts);
+    paintCardPicture();
+  }
+  // The admin's own card picture (from My elements) in place of the painted card.
+  let picToken = 0;
+  async function paintCardPicture() {
+    const p = partOf('card'), el = app.querySelector(G.step === 'change' ? '.f-paper' : '.f-stage.f-card');
+    if (!el) return;
+    const mine = ++picToken;
+    if (!p || !p.src) { if (el.dataset.pic) { el.style.backgroundImage = el.dataset.pic; delete el.dataset.pic; } return; }
+    const src = await P.mediaUrl(p.src).catch(() => null);
+    if (mine !== picToken || !src) return;
+    if (!el.dataset.pic) el.dataset.pic = el.style.backgroundImage;
+    el.style.backgroundImage = `url("${src}")`;
+  }
   const fparas = (key, r) => rich(key, r).split(/\n\s*\n/).map(x => `<p class="f-text">${x.replace(/\n/g, '<br>')}</p>`).join('');
   const fviews = {
     notice() {
       return fPage(fCard('fairy-card-rsvp.webp', 'f-card-rsvp', `
-        ${G.site.fairyTitle === C.DEFAULT_SITE.fairyTitle ? `<h1 class="f-title f-title-img"><img src="${esc(F('fairy-t-kindly.webp'))}" alt="${esc(G.site.fairyTitle)}"></h1>` : `<h1 class="f-script f-title">${fcaps(rich('fairyTitle'))}</h1>`}
-        <p class="f-hand f-sub">${rich('fairySubtitle')}</p>
-        ${fparas('fairyMessage')}
-        <p class="f-text f-closing">${rich('fairyClosing')}</p>
-        <button class="f-btn" data-act="f-next">${rich('fairyNext')}</button>`, fSize('fairyRsvpSize')));
+        ${G.site.fairyTitle === C.DEFAULT_SITE.fairyTitle ? `<h1 class="f-title f-title-img" ${fp('title', 'fairyTitle')}><img src="${esc(F('fairy-t-kindly.webp'))}" alt="${esc(G.site.fairyTitle)}"></h1>` : `<h1 class="f-script f-title" ${fp('title', 'fairyTitle')}>${fcaps(rich('fairyTitle'))}</h1>`}
+        <p class="f-hand f-sub" ${fp('sub', 'fairySubtitle')}>${rich('fairySubtitle')}</p>
+        ${fparas('fairyMessage').replace(/<p class="f-text">/g, `<p class="f-text" ${fp('msg', 'fairyMessage')}>`)}
+        <p class="f-text f-closing" ${fp('closing', 'fairyClosing')}>${rich('fairyClosing')}</p>
+        <button class="f-btn" data-act="f-next" ${fp('btn', 'fairyNext')}>${rich('fairyNext')}</button>`, fSize('fairyRsvpSize')));
     },
     invite() {
       return fPage(fCard('fairy-card-name.webp', 'f-card-name', `
-        <h1 class="f-script f-title">${rich('fairyHello')}</h1>
-        <p class="f-hand f-sub">${rich('fairyAsk')}</p>
-        <p class="f-text">${rich('fairyAskSub')}</p>
+        <h1 class="f-script f-title" ${fp('title', 'fairyHello')}>${rich('fairyHello')}</h1>
+        <p class="f-hand f-sub" ${fp('sub', 'fairyAsk')}>${rich('fairyAsk')}</p>
+        <p class="f-text" ${fp('text', 'fairyAskSub')}>${rich('fairyAskSub')}</p>
         <form class="f-search" data-form="search" novalidate>
           <label for="g-name" class="g-sr">Your first name and last name</label>
-          <input id="g-name" name="name" autocomplete="name" placeholder="${t('fairyPlaceholder')}" required>
+          <input id="g-name" name="name" autocomplete="name" placeholder="${t('fairyPlaceholder')}" required ${fp('input', 'fairyPlaceholder')}>
           ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
-          <button class="f-btn" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Finding…' : t('fairyFind')}</button>
+          <button class="f-btn" ${G.busy ? 'disabled' : ''} ${fp('btn', 'fairyFind')}>${G.busy ? 'Finding…' : t('fairyFind')}</button>
         </form>`, fSize('fairyNameSize')));
     },
     surprise() {
       const r = G.r;
       return fPage(fCard('fairy-card-surprise.webp', 'f-card-surprise', `
-        <h1 class="f-script f-title">${rich('fairySurprise', r)}</h1>
-        <p class="f-hand f-sub">${rich('fairySurpriseSub', r)}</p>
-        <p class="f-text">${rich(r.submittedAt ? 'fairySurpriseDone' : 'fairySurpriseWait', r)}</p>
-        <button class="f-btn" data-act="${r.submittedAt ? 'f-viewonly' : 'f-again'}">${rich('fairySurpriseButton', r)}</button>`, fSize('fairySurpriseSize')));
+        <h1 class="f-script f-title" ${fp('title', 'fairySurprise')}>${rich('fairySurprise', r)}</h1>
+        <p class="f-hand f-sub" ${fp('sub', 'fairySurpriseSub')}>${rich('fairySurpriseSub', r)}</p>
+        <p class="f-text" ${fp('text', r.submittedAt ? 'fairySurpriseDone' : 'fairySurpriseWait')}>${rich(r.submittedAt ? 'fairySurpriseDone' : 'fairySurpriseWait', r)}</p>
+        <button class="f-btn" data-act="${r.submittedAt ? 'f-viewonly' : 'f-again'}" ${fp('btn', 'fairySurpriseButton')}>${rich('fairySurpriseButton', r)}</button>`, fSize('fairySurpriseSize')));
     },
     reservation() {
       const r = G.r, me = G.who || r.repId;
@@ -2375,18 +2471,18 @@ guest: function () {
       return fPage(`<main class="f-stage f-res" style="${fSize('fairyResSize')}">
           <div class="f-res-body" style="${['l1', 'l2', 'l3', 'r1', 'r2', 'r3'].map(k => `--${k}:url('${esc(F('fairy-res-' + k + (k[1] === '2' ? '.png' : '.webp')))}')`).join(';')}">
             <div class="f-res-in">
-              <p class="f-hand f-reserved">${rich('fairyReserved', r)}</p>
-              <p class="f-script f-num">${r.seats}</p>
-              <p class="f-hand f-seats">${r.seats === 1 ? esc(C.fill(G.site.fairySeatsWord, G.site, r)).replace(/s$/i, '') : rich('fairySeatsWord', r)}</p>
-              <p class="f-text f-for">${rich('fairyForYou', r)}</p>
-              <p class="f-text f-small">${rich('fairyCount', r)}</p>
+              <p class="f-hand f-reserved" ${fp('reserved', 'fairyReserved')}>${rich('fairyReserved', r)}</p>
+              <p class="f-script f-num" ${fp('num')}>${r.seats}</p>
+              <p class="f-hand f-seats" ${fp('seats', 'fairySeatsWord')}>${r.seats === 1 ? esc(C.fill(G.site.fairySeatsWord, G.site, r)).replace(/s$/i, '') : rich('fairySeatsWord', r)}</p>
+              <p class="f-text f-for" ${fp('for', 'fairyForYou')}>${rich('fairyForYou', r)}</p>
+              <p class="f-text f-small" ${fp('count', 'fairyCount')}>${rich('fairyCount', r)}</p>
               ${note}
-              <ul class="f-rows">${rows}</ul>
-              <h2 class="f-check">${rich('fairyCheck', r)}</h2>
-              <p class="f-text f-small f-yay">${going.length ? `Yay! ${going.length} out of ${r.guests.length} ${going.length === 1 ? 'is' : 'are'} coming!` : `No one is coming? We’ll miss you!`}</p>
-              <ul class="f-recap">${recap(going, true)}${notGoing.length && going.length ? '<li class="f-gap"></li>' : ''}${recap(notGoing, false)}</ul>
+              <ul class="f-rows" ${fp('rows')}>${rows}</ul>
+              <h2 class="f-check" ${fp('check', 'fairyCheck')}>${rich('fairyCheck', r)}</h2>
+              <p class="f-text f-small f-yay" ${fp('yay')}>${going.length ? `Yay! ${going.length} out of ${r.guests.length} ${going.length === 1 ? 'is' : 'are'} coming!` : `No one is coming? We’ll miss you!`}</p>
+              <ul class="f-recap" ${fp('recap')}>${recap(going, true)}${notGoing.length && going.length ? '<li class="f-gap"></li>' : ''}${recap(notGoing, false)}</ul>
               ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
-              ${G.closed ? '' : view ? `<button class="f-btn f-mind" data-act="f-mind">${rich('fairyChangeMind', r)}</button>` : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
+              ${G.closed ? '' : view ? `<button class="f-btn f-mind" data-act="f-mind" ${fp('btn', 'fairyChangeMind')}>${rich('fairyChangeMind', r)}</button>` : `<button class="f-btn" data-act="f-submit" ${G.busy ? 'disabled' : ''} ${fp('btn', 'fairySubmit')}>${G.busy ? 'Sending…' : t('fairySubmit')}</button>`}
             </div>
           </div>
         </main>`, 'f-page-res');
@@ -2401,11 +2497,11 @@ guest: function () {
       return fPage(`<main class="f-stage f-env" style="${fSize('fairyChangeSize')}--eb:url('${esc(F('fairy-env-back.webp'))}');--ef:url('${esc(F('fairy-env-front.webp'))}')">
           <div class="f-env-back" aria-hidden="true"></div>
           <div class="f-env-slot"><div class="f-paper" style="background-image:url('${esc(F('fairy-paper.webp'))}')">
-            ${G.site.fairyChangeTitle == null || G.site.fairyChangeTitle === C.DEFAULT_SITE.fairyChangeTitle ? `<h1 class="f-ctitle-img"><img src="${esc(F('fairy-t-change.webp'))}" alt="${esc(C.DEFAULT_SITE.fairyChangeTitle)}"></h1>` : `<h1 class="f-script f-ctitle">${rich('fairyChangeTitle', r)}</h1>`}
-            <p class="f-chello">${esc(C.fill(G.site.fairyChangeHello != null ? G.site.fairyChangeHello : C.DEFAULT_SITE.fairyChangeHello, G.site, r).replace(/\{name\}/g, first))}</p>
-            <div class="f-opts" role="radiogroup" aria-label="${esc(me.name)}">${opt('attending', 'fairyYes', `<img class="f-tulip" src="${esc(F('fairy-tulip.webp'))}" alt="">`)}${opt('not_attending', 'fairyNo')}</div>
+            ${G.site.fairyChangeTitle == null || G.site.fairyChangeTitle === C.DEFAULT_SITE.fairyChangeTitle ? `<h1 class="f-ctitle-img" ${fp('ctitle', 'fairyChangeTitle')}><img src="${esc(F('fairy-t-change.webp'))}" alt="${esc(C.DEFAULT_SITE.fairyChangeTitle)}"></h1>` : `<h1 class="f-script f-ctitle" ${fp('ctitle', 'fairyChangeTitle')}>${rich('fairyChangeTitle', r)}</h1>`}
+            <p class="f-chello" ${fp('chello', 'fairyChangeHello')}>${esc(C.fill(G.site.fairyChangeHello != null ? G.site.fairyChangeHello : C.DEFAULT_SITE.fairyChangeHello, G.site, r).replace(/\{name\}/g, first))}</p>
+            <div class="f-opts" ${fp('opts')} role="radiogroup" aria-label="${esc(me.name)}">${opt('attending', 'fairyYes', `<img class="f-tulip" src="${esc(F('fairy-tulip.webp'))}" alt="">`)}${opt('not_attending', 'fairyNo')}</div>
             ${G.error ? `<p class="f-error" role="alert">${esc(G.error)}</p>` : ''}
-            ${G.closed ? `<p class="f-error">The RSVP deadline has passed, so answers can no longer be changed here.</p>` : `<button class="f-btn f-save" data-act="f-save" ${G.busy ? 'disabled' : ''}>${G.busy ? 'Saving…' : rich('fairySave', r)}</button>`}
+            ${G.closed ? `<p class="f-error">The RSVP deadline has passed, so answers can no longer be changed here.</p>` : `<button class="f-btn f-save" data-act="f-save" ${G.busy ? 'disabled' : ''} ${fp('btn', 'fairySave')}>${G.busy ? 'Saving…' : rich('fairySave', r)}</button>`}
           </div></div>
           <div class="f-env-front" aria-hidden="true"></div>
         </main>`, 'f-page-env');
@@ -2417,11 +2513,11 @@ guest: function () {
       return fPage(`<main class="f-stage f-thanks" style="${fSize('fairyThanksSize')}">
           <div class="f-flies" aria-hidden="true">${flies}</div>
           <h1 class="g-sr">${esc(word)}</h1>
-          ${G.site.fairyThanks === C.DEFAULT_SITE.fairyThanks ? `<span class="f-write-img" aria-hidden="true"><span class="f-pen-mask"><img src="${esc(F('fairy-t-thanks.webp'))}" alt=""></span></span>` : `<svg class="f-write" viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
+          ${G.site.fairyThanks === C.DEFAULT_SITE.fairyThanks ? `<span class="f-write-img" aria-hidden="true" ${fp('write', 'fairyThanks')}><span class="f-pen-mask"><img src="${esc(F('fairy-t-thanks.webp'))}" alt=""></span></span>` : `<svg class="f-write" ${fp('write', 'fairyThanks')} viewBox="0 0 700 170" aria-hidden="true"><defs><clipPath id="f-wipe"><rect class="f-wipe" x="0" y="0" width="700" height="170"/></clipPath></defs>
             <text x="350" y="118" text-anchor="middle" class="f-write-fill" clip-path="url(#f-wipe)">${esc(word)}</text>
             <text x="350" y="118" text-anchor="middle" class="f-write-line">${esc(word)}</text></svg>`}
           ${G.previewMode ? '<p class="f-note">Preview only: this answer was not saved.</p>' : ''}
-          ${link ? `<a class="f-link" href="${esc(link)}" target="_top" rel="noopener">${rich('fairyBackLink', G.r)}</a>` : `<button type="button" class="f-link" data-act="f-again">${rich('fairyBackLink', G.r)}</button>`}
+          ${link ? `<a class="f-link" ${fp('link', 'fairyBackLink')} href="${esc(link)}" target="_top" rel="noopener">${rich('fairyBackLink', G.r)}</a>` : `<button type="button" class="f-link" data-act="f-again" ${fp('link', 'fairyBackLink')}>${rich('fairyBackLink', G.r)}</button>`}
         </main>`, 'f-page-thanks');
     },
     error() { return views.error(); },
@@ -2497,8 +2593,8 @@ guest: function () {
     if (!st.querySelector(':scope > .f-size-h')) st.insertAdjacentHTML('beforeend', '<span class="f-size-h" data-h="fsize" title="Drag to resize"></span>');
   }
   function paintDecor() {
-    paintFairyHandle();
-    const card = app.querySelector('.g-card'), k = screenKey();
+    paintFairyHandle(); restyleParts(); paintSelBox();
+    const card = app.querySelector(fairy() ? '.f-stage' : '.g-card'), k = screenKey();
     if (!card) return;
     card.querySelectorAll(':scope > .g-decor').forEach(x => x.remove());
     const list = (G.theme && G.theme.decor && G.theme.decor[k]) || [];
@@ -2521,15 +2617,72 @@ guest: function () {
   // Design tab only: drag to move, corner dot to resize, top dot to turn. Each finished move is sent back to the board.
   const tell = msg => window.parent.postMessage(Object.assign({ screen: screenKey() }, msg), '*');
   function decorList() { return ((G.theme && G.theme.decor && G.theme.decor[screenKey()]) || []); }
+  // ---------- Design tab, Fairy Garden: the parts of the card ----------
+  const partEls = id => [...app.querySelectorAll(`[data-part="${id}"]`)];
+  const selPart = () => D.sel && D.sel.startsWith('p:') ? D.sel.slice(2) : null;
+  // One design pixel (the card drawn at 100%) in screen pixels.
+  function kPx(el) {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;width:calc(100 * var(--k));height:0';
+    el.appendChild(probe); const v = probe.getBoundingClientRect().width / 100; probe.remove();
+    return v || 1;
+  }
+  function paintSelBox() {
+    let box = document.querySelector('.f-selbox');
+    const id = selPart(), els = design && id ? partEls(id) : [];
+    if (!els.length) { if (box) box.remove(); return; }
+    if (!box) {
+      box = document.createElement('div'); box.className = 'f-selbox';
+      box.innerHTML = '<span class="f-sb-size" data-h="size" title="Drag to resize"></span><span class="f-sb-turn" data-h="turn" title="Drag to turn"></span>';
+      document.body.appendChild(box); box.addEventListener('pointerdown', partDrag);
+    }
+    const rs = els.map(e => e.getBoundingClientRect()), l = Math.min(...rs.map(r => r.left)), t = Math.min(...rs.map(r => r.top));
+    Object.assign(box.style, { left: l + 'px', top: t + 'px', width: Math.max(...rs.map(r => r.right)) - l + 'px', height: Math.max(...rs.map(r => r.bottom)) - t + 'px' });
+  }
+  if (design) { addEventListener('scroll', paintSelBox, { passive: true }); addEventListener('resize', paintSelBox); }
+  // Drag a part to move it; the corner dot resizes it, the top dot turns it. The board keeps the change (so Undo works).
+  function partDrag(e) {
+    const id = selPart(); if (!id) return;
+    const els = partEls(id); if (!els.length) return;
+    e.preventDefault(); e.stopPropagation();
+    const p0 = Object.assign({ x: 0, y: 0, s: 1, rot: 0 }, partOf(id)), k = kPx(els[0].closest('.f-stage') || app);
+    const rs = els.map(x => x.getBoundingClientRect()), cx = (Math.min(...rs.map(r => r.left)) + Math.max(...rs.map(r => r.right))) / 2, cy = (Math.min(...rs.map(r => r.top)) + Math.max(...rs.map(r => r.bottom))) / 2;
+    const mode = e.target.dataset.h || 'move', sx = e.clientX, sy = e.clientY, d0 = Math.hypot(sx - cx, sy - cy) || 1;
+    const next = Object.assign({}, p0), cap = e.target; cap.setPointerCapture(e.pointerId);
+    const move = ev => {
+      if (mode === 'move') { next.x = Math.round((p0.x + (ev.clientX - sx) / k) * 10) / 10; next.y = Math.round((p0.y + (ev.clientY - sy) / k) * 10) / 10; }
+      if (mode === 'size') next.s = Math.round(Math.min(5, Math.max(0.2, p0.s * Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0)) * 1000) / 1000;
+      if (mode === 'turn') {
+        let a = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90;
+        if (a > 180) a -= 360;
+        for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(a - snap) < 4) a = snap;
+        next.rot = Math.round(a);
+      }
+      els.forEach(x => { x.style.setProperty('--px', next.x); x.style.setProperty('--py', next.y); x.style.scale = next.s; x.style.rotate = next.rot + 'deg'; });
+      paintSelBox();
+    };
+    const up = () => {
+      cap.removeEventListener('pointermove', move); cap.removeEventListener('pointerup', up); cap.removeEventListener('pointercancel', up);
+      const patch = {};
+      for (const f of ['x', 'y', 's', 'rot']) if (next[f] !== p0[f]) patch[f] = next[f];
+      if (Object.keys(patch).length) tell({ type: 'pixie-part-change', id, patch });
+    };
+    cap.addEventListener('pointermove', move); cap.addEventListener('pointerup', up); cap.addEventListener('pointercancel', up);
+  }
   function select(id) {
-    D.sel = id;
+    D.sel = id; paintSelBox();
     app.querySelectorAll('.g-el').forEach(x => x.classList.toggle('is-sel', x.dataset.el === id));
     const st = app.querySelector('.f-stage.f-design'); if (st) st.classList.toggle('is-sel', id === 'fairy-card');
   }
   if (design) {
     document.body.classList.add('g-designing');
     app.addEventListener('pointerdown', e => {
-      const node = e.target.closest('.g-el'), fst = !node && e.target.closest('.f-stage.f-design');
+      const node = e.target.closest('.g-el'), part = !node && fairy() && e.target.closest('[data-part]'), fst = !node && !part && e.target.closest('.f-stage.f-design');
+      if (part) {
+        const id = part.dataset.part;
+        if (D.sel !== 'p:' + id) { select('p:' + id); tell({ type: 'pixie-part-select', id, key: part.dataset.key || '' }); }
+        return partDrag(e);
+      }
       if (fst) {
         e.preventDefault();
         if (D.sel !== 'fairy-card') { select('fairy-card'); window.parent.postMessage({ type: 'pixie-fairy-select', on: true }, '*'); }
@@ -2575,6 +2728,13 @@ guest: function () {
     window.addEventListener('keydown', e => {
       if (!D.sel || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
       const step = e.shiftKey ? 2 : 0.5, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      const pid = selPart();
+      if (pid) {
+        const pd = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key], m = e.shiftKey ? 5 : 1;
+        if (pd) { e.preventDefault(); tell({ type: 'pixie-part-nudge', id: pid, dx: pd[0] * m, dy: pd[1] * m }); }
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); tell({ type: 'pixie-part-change', id: pid, patch: { hide: true } }); }
+        return;
+      }
       if (d) { e.preventDefault(); tell({ type: 'pixie-decor-nudge', id: D.sel, dx: d[0], dy: d[1] }); }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); tell({ type: 'pixie-decor-delete', id: D.sel }); }
     });
@@ -2582,7 +2742,12 @@ guest: function () {
   // The board's Customize page sends unsaved looks here so the preview updates live.
   window.addEventListener('message', e => {
     if (!preview || e.source !== window.parent || !e.data) return;
-    if (e.data.type === 'pixie-decor-select') { select(e.data.id); return; }
+    if (e.data.type === 'pixie-decor-select') {
+      select(e.data.id);
+      const pid = selPart(), el = pid && partEls(pid)[0];
+      if (el) tell({ type: 'pixie-part-select', id: pid, key: el.dataset.key || '' });
+      return;
+    }
     if (e.data.type !== 'pixie-theme') return;
     if (design && e.data.selected !== undefined) D.sel = e.data.selected;
     // The look can arrive before this page has finished loading; keep it and use it once ready.
@@ -2593,8 +2758,14 @@ guest: function () {
       const map = e.data.theme.rsvpDesign === 'fairy' ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
       if (map[G.step]) G.step = map[G.step];
     }
+    // Design tab: words typed into a selected part come with the look.
+    let wordsChanged = false;
+    if (e.data.site && typeof e.data.site === 'object') {
+      wordsChanged = Object.keys(e.data.site).some(k => G.site[k] !== e.data.site[k]);
+      if (wordsChanged) G.site = Object.assign({}, G.site, e.data.site);
+    }
     G.theme = e.data.theme; P.applyTheme(document.body, G.theme); P.paintBackground(app.querySelector('.g-bg'), G.theme);
-    if (logoChanged && !moving) { const y = scrollY; render(); scrollTo(0, y); } else { paintHero(); paintDecor(); }
+    if ((logoChanged || wordsChanged) && !moving) { const y = scrollY; render(); scrollTo(0, y); } else { paintHero(); paintDecor(); }
   });
 
   async function openReservation(token) {
@@ -3584,8 +3755,34 @@ guest: function () {
   }
 
   // ---------- Design (Canva-style): place your own elements and text on each guest screen ----------
-  const D_FAIRY_KEY = { welcome: 'fairyRsvpSize', notice: 'fairyRsvpSize', invite: 'fairyNameSize', reservation: 'fairyResSize', thanks: 'fairyThanksSize' };
-  const D_SCREENS = [['welcome', 'Welcome'], ['notice', 'Heads-up'], ['invite', 'Invitation'], ['reservation', 'Family page'], ['thanks', 'Thank you']];
+  const D_FAIRY_KEY = { welcome: 'fairyRsvpSize', notice: 'fairyRsvpSize', invite: 'fairyNameSize', surprise: 'fairySurpriseSize', reservation: 'fairyResSize', change: 'fairyChangeSize', thanks: 'fairyThanksSize' };
+  const D_SCREENS_CLASSIC = [['welcome', 'Welcome'], ['notice', 'Heads-up'], ['invite', 'Invitation'], ['reservation', 'Family page'], ['thanks', 'Thank you']];
+  const D_SCREENS_FAIRY = [['notice', 'Kindly RSVP'], ['invite', 'Hello'], ['surprise', 'Surprise'], ['reservation', 'Seats page'], ['change', 'Change of plans'], ['thanks', 'Thank you']];
+  const dFairy = () => !!(B.themeDraft && B.themeDraft.rsvpDesign === 'fairy');
+  const dScreens = () => dFairy() ? D_SCREENS_FAIRY : D_SCREENS_CLASSIC;
+  const D_SCREENS = [...D_SCREENS_CLASSIC, ...D_SCREENS_FAIRY.filter(x => !D_SCREENS_CLASSIC.some(y => y[0] === x[0]))];
+  // The screen being designed, always one the chosen RSVP design has.
+  const dScr = () => dScreens().some(x => x[0] === B.dScreen) ? B.dScreen : dScreens()[0][0];
+  // Fairy Garden card parts (title, words, buttons...): what the admin changed; nothing = exactly as in the design pictures.
+  const dPartId = () => B.dSel && B.dSel.startsWith('p:') ? B.dSel.slice(2) : null;
+  function partsOf() { const t = B.themeDraft; t.parts = t.parts || {}; return (t.parts[dScr()] = t.parts[dScr()] || {}); }
+  function partSet(id, patch) {
+    const ps = partsOf(), p = Object.assign({}, ps[id], patch);
+    const plain = { x: 0, y: 0, s: 1, rot: 0, op: 1, hide: false };
+    for (const k of Object.keys(p)) if (p[k] === undefined || p[k] === null || p[k] === '' || plain[k] === p[k]) delete p[k];
+    if (Object.keys(p).length) ps[id] = p; else delete ps[id];
+  }
+  function partsClean() {
+    const t = B.themeDraft.parts || {}, out = {};
+    for (const [k, v] of Object.entries(t)) if (v && Object.keys(v).length) out[k] = v;
+    return Object.keys(out).length ? out : null;
+  }
+  const dSnap = () => JSON.stringify({ decor: decor(), parts: B.themeDraft.parts || null, site: B.siteDraft });
+  function dRestore(str) {
+    const o = JSON.parse(str);
+    if (o && o.decor && 'parts' in o) { B.themeDraft.decor = o.decor; B.themeDraft.parts = o.parts; if (o.site) { B.siteDraft = o.site; B.siteDirty = true; } }
+    else B.themeDraft.decor = o;
+  }
   const D_HIDE = [['glow', 'Step dots at the top'], ['icon', 'Icon and logo'], ['eyebrow', 'Small heading above the title'], ['foot', '“With Love by Pixie Craft Studio”']];
   const D_LAYERS = [['front', 'In front of everything'], ['under', 'Under the words'], ['behind', 'Behind the card']];
   const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), x => (x % 36).toString(36)).join('');
@@ -3595,14 +3792,14 @@ guest: function () {
     for (const [k] of D_SCREENS) if (!Array.isArray(t.decor[k])) t.decor[k] = [];
     return t.decor;
   }
-  const dList = () => decor()[B.dScreen || 'welcome'];
+  const dList = () => decor()[dScr()];
   const dSelected = () => dList().find(e => e.id === B.dSel) || null;
   // Undo / Redo keep copies of the design; quick changes to the same control count as one step.
   function dRemember(key) {
     const now = Date.now();
     if (key && B.dLastKey === key && now - B.dLastAt < 700) { B.dLastAt = now; return; }
     B.dLastKey = key; B.dLastAt = now;
-    (B.dUndo = B.dUndo || []).push(JSON.stringify(decor())); if (B.dUndo.length > 60) B.dUndo.shift();
+    (B.dUndo = B.dUndo || []).push(dSnap()); if (B.dUndo.length > 60) B.dUndo.shift();
     B.dRedo = [];
   }
   function dChanged(full) {
@@ -3616,11 +3813,12 @@ guest: function () {
   }
   function dSend() {
     const f = app.querySelector('[data-region="frame"]');
-    if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'pixie-theme', theme: B.themeDraft, selected: B.dSel || null }, '*');
+    if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'pixie-theme', theme: B.themeDraft, site: B.siteDraft, selected: B.dSel || null }, '*');
   }
   function dRefresh() {
     const p = app.querySelector('[data-region="d-props"]'); if (p) p.innerHTML = dProps();
     const l = app.querySelector('[data-region="d-layers"]'); if (l) l.innerHTML = dLayers();
+    const pl = app.querySelector('[data-region="d-parts"]'); if (pl) pl.innerHTML = dPartsList();
     paintLib();
   }
   const dRange = (k, label, min, max, step, v, unit) => `<label class="a-slider d-slider"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-dprop="${k}"><output>${unit === '%' ? Math.round(v * 100) + '%' : Math.round(v) + (unit || '')}</output></label>`;
@@ -3628,10 +3826,11 @@ guest: function () {
     const e = dSelected();
     if (e && e.type === 'text') P.loadFonts(P.allFonts());
     if (B.dSel === 'fairy-card') {
-      const k = D_FAIRY_KEY[B.dScreen || 'welcome'], v = B.themeDraft[k] || 100, l = (FAIRY_SIZES.find(x => x[0] === k) || [])[1] || 'Card';
+      const k = D_FAIRY_KEY[dScr()], v = B.themeDraft[k] || 100, l = (FAIRY_SIZES.find(x => x[0] === k) || [])[1] || 'Card';
       return `<h3 class="a-h3">Selected: ${l}</h3><p class="a-muted a-small">Drag the corner dot on the card, or use the slider. 100% is the size in your design.</p>
-        <label class="a-slider d-slider"><span>Size</span><input type="range" min="60" max="160" step="1" value="${v}" data-fsize="${k}"><output>${v}%</output></label>`;
+        <label class="a-slider d-slider"><span>Size</span><input type="range" min="60" max="160" step="1" value="${v}" data-fsize="${k}"><output>${v}%</output></label>${dCardPic()}`;
     }
+    if (dPartId()) return dPartProps();
     if (!e) return `<h3 class="a-h3">Selected element</h3><p class="a-muted a-small">Click an element on the page to move it, resize it from the corner dot, or turn it with the top dot. Arrow keys nudge it.</p>`;
     const m = B.meta;
     const text = e.type === 'text' ? `
@@ -3655,6 +3854,49 @@ guest: function () {
         <button type="button" class="a-btn a-btn-ghost a-btn-sm" data-act="d-dup">Duplicate</button>
         <button type="button" class="a-btn a-btn-danger a-btn-sm" data-act="d-del">Delete</button></div>`;
   }
+  function dPartsList() {
+    const ps = partsOf(), sel = dPartId();
+    return `<ul class="d-part-list">${(C.FAIRY_PARTS[dScr()] || []).filter(x => x[2] !== 'card').map(([id, label]) => {
+      const p = ps[id] || {}, changed = Object.keys(p).some(k => k !== 'hide');
+      return `<li><button type="button" class="${sel === id ? 'is-on' : ''}" data-act="d-ppick" data-id="${id}"><span>${esc(label)}</span>${changed ? '<small>changed</small>' : ''}</button>
+        <button type="button" class="d-part-eye ${p.hide ? 'is-off' : ''}" data-act="d-phide" data-id="${id}" aria-pressed="${!p.hide}" title="${p.hide ? 'Show' : 'Hide'} ${esc(label)}">${p.hide ? 'Hidden' : 'Shown'}</button></li>`;
+    }).join('')}</ul>`;
+  }
+  // The card picture: the painted card from the design, or one of My elements.
+  function dCardPic() {
+    if (!(C.FAIRY_PARTS[dScr()] || []).some(x => x[2] === 'card')) return '';
+    const lib = (B.studio && B.studio.elements) || [], cur = (partsOf().card || {}).src || '';
+    return `<h3 class="a-h3">${dScr() === 'change' ? 'Paper picture' : 'Card picture'}</h3>
+      <p class="a-muted a-small">Pick one of My elements to use instead of the painted ${dScr() === 'change' ? 'paper' : 'card'}. The words stay where they are.</p>
+      <div class="d-lib"><div class="d-lib-item"><button type="button" class="d-lib-add d-orig ${cur ? '' : 'is-on'}" data-act="d-pcard" data-src="" title="The original picture">Original</button></div>
+      ${lib.map(x => `<div class="d-lib-item"><button type="button" class="d-lib-add ${cur === x.src ? 'is-on' : ''}" data-act="d-pcard" data-src="${esc(x.src)}" title="Use ${esc(x.name)}"><img alt="${esc(x.name)}" data-src="${esc(x.src)}"></button></div>`).join('')}</div>
+      ${lib.length ? '' : '<p class="a-muted a-small">Upload a picture in My elements first.</p>'}`;
+  }
+  const LETTERING = { fairyTitle: 1, fairyChangeTitle: 1, fairyThanks: 1 };
+  const dWordNotes = (key, word) => `${/\{/.test(C.DEFAULT_SITE[key] || '') ? '<p class="a-muted a-small">Words in { } fill in by themselves, like the number of seats.</p>' : ''}
+    ${LETTERING[key] ? `<p class="a-muted a-small">${word === C.DEFAULT_SITE[key] ? 'This is painted lettering. Changing the words switches it to typed letters, which can take any font and color.' : 'Typed letters are used because the words were changed.'}</p>` : ''}
+    ${word !== C.DEFAULT_SITE[key] && C.DEFAULT_SITE[key] != null ? `<button type="button" class="a-link a-small" data-act="d-pword-reset" data-k="${esc(key)}">Use the original words</button>` : ''}`;
+  function dPartProps() {
+    const id = dPartId(), def = (C.FAIRY_PARTS[dScr()] || []).find(x => x[0] === id); if (!def) return '';
+    const p = partsOf()[id] || {}, key = B.dPartKey, kind = def[2], m = B.meta;
+    const word = key && B.siteDraft[key] != null ? B.siteDraft[key] : key ? C.DEFAULT_SITE[key] : '';
+    const range = (f, label, min, max, step, v, unit) => `<label class="a-slider d-slider"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-pprop="${f}"><output>${unit === '°' ? Math.round(v) + '°' : Math.round(v * 100) + '%'}</output></label>`;
+    const color = (f, label, v) => `<label class="a-color"><input type="color" data-pprop="${f}" value="${esc(v || '#4a5232')}"><span>${label}</span></label>${v ? `<button type="button" class="a-link a-small" data-act="d-pclear" data-f="${f}">as designed</button>` : ''}`;
+    const fonts = kind === 'text' || kind === 'btn' || id === 'input' ? `<label class="a-field"><span>Font</span><select data-pprop="font" class="a-font-select" ${p.font ? `style="font-family:'${esc(P.fontFamily(p.font))}'"` : ''}><option value="" ${p.font ? '' : 'selected'}>As in the design</option>${P.fontOptions(p.font || '', 'Script & calligraphy', B.themeDraft.customFont ? [[m.customFont, m.customFont]] : [])}</select></label>` : '';
+    if (p.font) P.loadFonts([p.font]);
+    return `<h3 class="a-h3">Selected: ${esc(def[1])}</h3>
+      <p class="a-muted a-small">Drag it on the card to move it. The corner dot resizes it and the top dot turns it. Arrow keys nudge it.</p>
+      ${key ? `<label class="a-field"><span>${id === 'input' ? 'Hint inside the box' : 'Words'}</span><textarea rows="3" data-pword="${esc(key)}" maxlength="600">${esc(word)}</textarea></label>
+<div data-region="d-pword-notes">${dWordNotes(key, word)}</div>` : ''}
+      ${fonts}
+      ${kind === 'text' || kind === 'btn' || id === 'input' || id === 'rows' || id === 'recap' || id === 'opts' ? `<div class="d-row">${color('color', kind === 'btn' ? 'Words color' : 'Color', p.color)}${kind === 'btn' ? color('fill', 'Button color', p.fill) : ''}</div>` : ''}
+      ${range('s', 'Size', 0.2, 3, 0.01, p.s || 1)}
+      ${range('rot', 'Turn', -180, 180, 1, p.rot || 0, '°')}
+      ${range('op', 'See-through', 0.1, 1, 0.05, p.op === undefined ? 1 : p.op)}
+      <div class="d-row d-actions">
+        <button type="button" class="a-btn a-btn-ghost a-btn-sm" data-act="d-phide">${p.hide ? 'Show it' : 'Hide it'}</button>
+        <button type="button" class="a-btn a-btn-ghost a-btn-sm" data-act="d-preset">Back to the design</button></div>`;
+  }
   function dLayers() {
     const list = dList();
     if (!list.length) return '<p class="a-muted a-small">Nothing added to this screen yet.</p>';
@@ -3663,13 +3905,13 @@ guest: function () {
       <small>${{ front: 'front', under: 'under words', behind: 'behind card' }[e.layer || 'front']}</small></button></li>`).join('')}</ol>`;
   }
   function viewDesign() {
-    const d = decor(), lib = (B.studio && B.studio.elements) || [], k = B.dScreen || 'welcome';
+    const d = decor(), lib = (B.studio && B.studio.elements) || [], k = dScr();
     return `<div class="d-wrap">
       <div class="d-side">
         <section class="a-panel a-stack">
           <h3 class="a-h3">Design your RSVP</h3>
           <p class="a-muted a-small">Like Canva: add your own elements and text, then drag, resize, turn and layer them. It’s saved per client and looks the same on phones.</p>
-          <div class="a-seg a-seg-sm d-screens" role="group" aria-label="Screen">${D_SCREENS.map(([s, l]) => `<button type="button" data-act="d-screen" data-s="${s}" aria-pressed="${k === s}">${l}${d[s].length ? ` <small>${d[s].length}</small>` : ''}</button>`).join('')}</div>
+          <div class="a-seg a-seg-sm d-screens" role="group" aria-label="Screen">${dScreens().map(([s, l]) => `<button type="button" data-act="d-screen" data-s="${s}" aria-pressed="${k === s}">${l}${d[s].length ? ` <small>${d[s].length}</small>` : ''}</button>`).join('')}</div>
           <div class="d-row"><button type="button" class="a-btn a-btn-sm" data-act="d-text">+ Add text</button>
             <button type="button" class="a-btn a-btn-ghost a-btn-sm" data-act="d-undo" ${(B.dUndo || []).length ? '' : 'disabled'}>↶ Undo</button>
             <button type="button" class="a-btn a-btn-ghost a-btn-sm" data-act="d-redo" ${(B.dRedo || []).length ? '' : 'disabled'}>↷ Redo</button>
@@ -3683,10 +3925,11 @@ guest: function () {
             <button type="button" class="d-lib-x" data-act="d-lib-del" data-id="${esc(x.id)}" aria-label="Remove ${esc(x.name)} from My elements">×</button></div>`).join('')}</div>` : '<p class="a-muted a-small">No elements yet.</p>'}
         </section>
         <section class="a-panel a-stack" data-region="d-props">${dProps()}</section>
+        ${dFairy() && C.FAIRY_PARTS[k] ? `<section class="a-panel a-stack"><h3 class="a-h3">Parts of this card</h3><p class="a-muted a-small">Click a part here or on the card to move, resize, turn, recolor or retype it. Anything you don’t touch stays exactly as designed.</p><div data-region="d-parts">${dPartsList()}</div></section>` : ''}
         <section class="a-panel a-stack"><h3 class="a-h3">Layers on this screen</h3><div data-region="d-layers">${dLayers()}</div></section>
-        <section class="a-panel a-stack"><h3 class="a-h3">Show or hide parts of the card</h3>
+        ${dFairy() ? '' : `<section class="a-panel a-stack"><h3 class="a-h3">Show or hide parts of the card</h3>
           ${D_HIDE.map(([h, l]) => `<label class="a-check"><input type="checkbox" data-dhide="${h}" ${d.hide.includes(h) ? '' : 'checked'}> ${l}</label>`).join('')}
-          <p class="a-muted a-small">Words are changed in the Wording tab; colors and fonts of the page in Customize.</p></section>
+          <p class="a-muted a-small">Words are changed in the Wording tab; colors and fonts of the page in Customize.</p></section>`}
         <div class="a-savebar ${B.themeDirty ? 'is-dirty' : ''}" data-region="d-bar">
           <span class="a-savebar-msg">${B.themeDirty ? 'Your design has changes that aren’t saved yet.' : 'This is the saved design.'}</span>
           <button type="button" class="a-btn a-btn-ghost" data-act="d-cancel" ${B.themeDirty ? '' : 'hidden'}>Cancel</button>
@@ -3703,8 +3946,8 @@ guest: function () {
     app.querySelectorAll('.d-side img[data-src]').forEach(async img => { const s = await P.mediaUrl(img.dataset.src).catch(() => null); if (s) img.src = s; });
   }
   function dFrameUrl() {
-    const c = B.client, k = B.dScreen || 'welcome', r = c.reservations[0];
-    if ((k === 'reservation' || k === 'thanks') && r) return '/r/' + r.token + '?preview=1&design=1&step=' + k;
+    const c = B.client, k = dScr(), r = c.reservations[0];
+    if (['reservation', 'thanks', 'surprise', 'change'].includes(k) && r) return '/r/' + r.token + '?preview=1&design=1&step=' + k;
     return '/w/' + c.slug + '?preview=1&design=1' + (k === 'welcome' ? '' : '&step=' + k);
   }
   // A picture made smaller (long side up to 1600 px) before upload; GIFs are kept as they are so they still move.
@@ -3744,8 +3987,11 @@ guest: function () {
     if (ev.data.type === 'pixie-fairy-select') { B.dSel = ev.data.on ? 'fairy-card' : null; return dRefresh(); }
     if (ev.data.type === 'pixie-fairy-size' && FAIRY_SIZES.some(x => x[0] === ev.data.key)) { B.themeDraft[ev.data.key] = Math.min(160, Math.max(60, Math.round(Number(ev.data.value) || 100))); B.dSel = 'fairy-card'; return dChanged(true); }
     if (ev.data.type === 'pixie-decor-select' && !ev.data.id && B.dSel === 'fairy-card') { B.dSel = null; return dRefresh(); }
-    if (ev.data.screen !== (B.dScreen || 'welcome')) return;
+    if (ev.data.screen !== dScr()) return;
     const m = ev.data, list = dList();
+    if (m.type === 'pixie-part-select') { B.dSel = 'p:' + m.id; B.dPartKey = m.key || ''; return dRefresh(); }
+    if (m.type === 'pixie-part-change' && m.id && m.patch) { dRemember(); partSet(m.id, m.patch); B.dSel = 'p:' + m.id; return dChanged(true); }
+    if (m.type === 'pixie-part-nudge' && m.id) { dRemember('pn' + m.id); const p = partsOf()[m.id] || {}; partSet(m.id, { x: Math.round(((p.x || 0) + m.dx) * 10) / 10, y: Math.round(((p.y || 0) + m.dy) * 10) / 10 }); return dChanged(false); }
     if (m.type === 'pixie-decor-select') { B.dSel = m.id; return dRefresh(); }
     const i = list.findIndex(e => e.id === (m.item ? m.item.id : m.id)); if (i < 0) return;
     if (m.type === 'pixie-decor-change') { dRemember(); list[i] = Object.assign({}, list[i], m.item); B.dSel = m.item.id; return dChanged(true); }
@@ -3756,7 +4002,7 @@ guest: function () {
     const list = dList();
     switch (act) {
       case 'd-screen':
-        if ((b.dataset.s === 'reservation' || b.dataset.s === 'thanks') && !B.client.reservations.length) return U.toast('Add a family to the guest list first to design the family page and thank-you screen.');
+        if (['reservation', 'thanks', 'surprise', 'change'].includes(b.dataset.s) && !B.client.reservations.length) return U.toast('Add a family to the guest list first to design the family page and thank-you screen.');
         B.dScreen = b.dataset.s; B.dSel = null; dSideRedraw(); return loadFrame();
       case 'd-device': B.dDevice = b.dataset.d; app.querySelector('.d-frame').className = 'a-frame ' + (B.dDevice === 'desktop' ? 'desktop' : 'mobile') + ' d-frame';
         app.querySelectorAll('[data-act="d-device"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.d === B.dDevice)); return;
@@ -3795,8 +4041,8 @@ guest: function () {
       case 'd-undo': case 'd-redo': {
         const from = act === 'd-undo' ? (B.dUndo || []) : (B.dRedo || []), to = act === 'd-undo' ? (B.dRedo = B.dRedo || []) : (B.dUndo = B.dUndo || []);
         if (!from.length) return;
-        to.push(JSON.stringify(decor())); B.themeDraft.decor = JSON.parse(from.pop()); B.dLastKey = null;
-        if (!dSelected()) B.dSel = null;
+        to.push(dSnap()); dRestore(from.pop()); B.dLastKey = null;
+        if (!dSelected() && !dPartId() && B.dSel !== 'fairy-card') B.dSel = null;
         dChanged(false); return dSideRedraw();
       }
       case 'd-lib-del': {
@@ -3806,14 +4052,34 @@ guest: function () {
         return;
       }
       case 'd-cancel': resetDrafts(); B.dSel = null; B.dUndo = []; B.dRedo = []; return render();
+      case 'd-ppick': B.dSel = 'p:' + b.dataset.id; B.dPartKey = ''; dRefresh(); { const f = app.querySelector('[data-region="frame"]'); if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'pixie-decor-select', id: B.dSel }, '*'); } return;
+      case 'd-phide': { const id = b.dataset.id || dPartId(); if (!id) return; dRemember(); partSet(id, { hide: !(partsOf()[id] || {}).hide }); return dChanged(true); }
+      case 'd-preset': { const id = dPartId(); if (!id) return; dRemember(); partSet(id, { x: 0, y: 0, s: 1, rot: 0, op: 1, hide: false, color: '', fill: '', font: '' }); return dChanged(true); }
+      case 'd-pclear': { const id = dPartId(); if (!id) return; dRemember(); partSet(id, { [b.dataset.f]: '' }); return dChanged(true); }
+      case 'd-pword-reset': { const k = b.dataset.k; dRemember(); B.siteDraft[k] = C.DEFAULT_SITE[k]; B.siteDirty = true; return dChanged(true); }
+      case 'd-pcard': { dRemember(); partSet('card', { src: b.dataset.src || '' }); return dChanged(true); }
       case 'd-save': {
-        const out = await saveClient('PUT', '/theme', { theme: Object.assign({ decor: decor() }, Object.fromEntries(FAIRY_SIZES.map(([k]) => [k, B.themeDraft[k] || 100]))) }, 'Your design is saved!');
+        if (B.siteDirty) { try { await api('PUT', '/api/board/clients/' + B.client.id + '/site', { site: B.siteDraft }); } catch (err) { return U.toast(err.message, 'error'); } }
+        const out = await saveClient('PUT', '/theme', { theme: Object.assign({ decor: decor(), parts: partsClean() }, Object.fromEntries(FAIRY_SIZES.map(([k]) => [k, B.themeDraft[k] || 100]))) }, 'Your design is saved!');
         if (out) { B.dUndo = []; B.dRedo = []; }
         return;
       }
     }
   }
   function dInput(el) {
+    if (el.dataset.pprop && dPartId()) {
+      const f = el.dataset.pprop, v = ['color', 'fill', 'font'].includes(f) ? el.value : Number(el.value);
+      dRemember('pp' + f); partSet(dPartId(), { [f]: v });
+      const out = el.nextElementSibling;
+      if (out && out.tagName === 'OUTPUT') out.textContent = f === 'rot' ? Math.round(v) + '°' : Math.round(v * 100) + '%';
+      if (f === 'font') { el.style.fontFamily = v ? `'${P.fontFamily(v)}'` : ''; if (v) P.loadFonts([v]); }
+      dChanged(false); return true;
+    }
+    if (el.dataset.pword) {
+      dRemember('pw' + el.dataset.pword); B.siteDraft[el.dataset.pword] = el.value; B.siteDirty = true;
+      const n = app.querySelector('[data-region="d-pword-notes"]'); if (n) n.innerHTML = dWordNotes(el.dataset.pword, el.value);
+      dChanged(false); return true;
+    }
     const k = el.dataset.dprop;
     if (k) {
       const v = ['text', 'font', 'color', 'layer'].includes(k) ? el.value : Number(el.value);
