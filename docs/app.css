@@ -1197,39 +1197,39 @@ body.is-fairy { --f-ink: #5d6447; --f-text: #5d6447; --f-rose: #c79293; --f-rose
 .f-card-surprise .f-btn { margin-top: calc(22 * var(--k)); min-width: calc(72 * var(--k)); height: calc(25.5 * var(--k)); padding: 0 calc(8 * var(--k)); font-size: calc(13.1 * var(--k)); }
 
 /* reservation (2026-11-04 design): the lotus card. It grows with the guest list by stretching one plain row of the card (design px x --k, card 706 x 1069). */
-.f-res { --k: calc(100cqw / 706); --w: min(min(max(706px, 51.68vw) * var(--fs, 1), 160vw) * var(--f-cz, 1), 160vw); width: var(--w); container-type: inline-size; flex: none; align-self: flex-start; margin: 0 0 0 calc(50% - var(--w) / 2); translate: calc(var(--w) * 2 / 706) 0; }
-.f-page.f-page-res { overflow-x: hidden; padding-top: 43px; padding-bottom: 33px; }
-.f-res-body { position: relative; min-height: calc(1069 * var(--k)); box-sizing: border-box; padding: calc(var(--rs-top, 152) * var(--k)) calc(128 * var(--k)) calc(183 * var(--k)) calc(160 * var(--k));
-  background: var(--rt) left top / 100% auto no-repeat, var(--rb) left bottom / 100% auto no-repeat, var(--rm) left 0 top calc(759 * var(--k)) / 100% calc(100% - 1066 * var(--k)) no-repeat; }
+.f-res { --k: calc(100cqw / 715); --w: min(min(max(715px, 52.34vw) * var(--fs, 1), 160vw) * var(--f-cz, 1), 160vw); width: var(--w); container-type: inline-size; flex: none; align-self: flex-start; margin: 0 0 0 calc(50% - var(--w) / 2); translate: calc(var(--w) * -19.5 / 715) 0; }
+.f-page.f-page-res { overflow-x: hidden; padding-top: 36px; padding-bottom: 62px; }
+.f-res-body { position: relative; min-height: calc(1046 * var(--k)); box-sizing: border-box; padding: calc(var(--rs-top, 163) * var(--k)) calc(120 * var(--k)) calc(150 * var(--k)) calc(177 * var(--k));
+  background: var(--rt) left top / 100% auto no-repeat, var(--rb) left bottom / 100% auto no-repeat, var(--rm) left 0 top calc(729 * var(--k)) / 100% calc(100% - 1043 * var(--k)) no-repeat; }
 .f-res-in { --f-ink: #5d6447; --f-text: #5d6447; --f-line: #bdb9b5; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; font-family: 'Thasadith', var(--f-serif); }
 .f-reserved { font: 700 calc(33 * var(--k))/calc(36 * var(--k)) var(--f-hand); -webkit-text-stroke: calc(.9 * var(--k)) currentColor; margin: 0; }
-.f-num { font-family: 'La Belle Aurore', var(--f-script); -webkit-text-stroke: calc(3.5 * var(--k)) currentColor; text-shadow: calc(-1.5 * var(--k)) calc(1.5 * var(--k)) calc(1.5 * var(--k)) rgba(93, 100, 71, .35); font-size: calc(109 * var(--k)); line-height: calc(118 * var(--k)); margin-top: calc(4 * var(--k)); scale: .76 1; --tx: calc(2 * var(--k)); --ty: calc(19 * var(--k)); }
+.f-num { font-family: 'La Belle Aurore', var(--f-script); -webkit-text-stroke: calc(3.5 * var(--k)) currentColor; text-shadow: calc(-1.5 * var(--k)) calc(1.5 * var(--k)) calc(1.5 * var(--k)) rgba(93, 100, 71, .35); font-size: calc(109 * var(--k)); line-height: calc(114 * var(--k)); margin-top: calc(2 * var(--k)); scale: .76 1; --tx: calc(2 * var(--k)); --ty: calc(19 * var(--k)); }
 .f-seats { font: 700 calc(34 * var(--k))/calc(34 * var(--k)) var(--f-hand); -webkit-text-stroke: calc(.9 * var(--k)) currentColor; margin-top: calc(6 * var(--k)); }
 .f-res-in .f-text { font-family: 'Thasadith', var(--f-serif); }
 .f-for { font-size: calc(26 * var(--k)); line-height: calc(28 * var(--k)); margin-top: calc(2 * var(--k)); }
 .f-small { font-size: calc(13.3 * var(--k)); line-height: calc(18 * var(--k)); }
-.f-res-in > .f-small:not(.f-yay) { margin-top: calc(22 * var(--k)); font-size: calc(22 * var(--k)); line-height: calc(22 * var(--k)); width: calc(400 * var(--k)); }
+.f-res-in > .f-small:not(.f-yay) { margin-top: calc(21 * var(--k)); font-size: calc(21.4 * var(--k)); line-height: calc(21.5 * var(--k)); width: calc(388 * var(--k)); }
 .f-res-in > .f-note { margin-top: calc(10 * var(--k)); }
-.f-rows { list-style: none; margin: calc(55 * var(--k)) 0 0; padding: 0; width: calc(371 * var(--k)); --tx: calc(-22 * var(--k)); }
-.f-row { display: flex; align-items: center; justify-content: space-between; gap: calc(8 * var(--k)); box-sizing: border-box; min-height: calc(42.5 * var(--k)); padding: calc(4 * var(--k)) calc(18 * var(--k)) calc(4 * var(--k)) calc(18 * var(--k));
+.f-rows { list-style: none; margin: calc(24 * var(--k)) 0 0; padding: 0; width: calc(359 * var(--k)); --tx: calc(-26.5 * var(--k)); }
+.f-row { display: flex; align-items: center; justify-content: space-between; gap: calc(8 * var(--k)); box-sizing: border-box; min-height: calc(41.5 * var(--k)); padding: calc(4 * var(--k)) calc(18 * var(--k)) calc(4 * var(--k)) calc(17 * var(--k));
   border-top: calc(1.5 * var(--k)) solid var(--f-line); text-align: left; }
 .f-row:last-child { border-bottom: calc(1.5 * var(--k)) solid var(--f-line); }
 .f-row-name { position: relative; font: 700 calc(22.5 * var(--k))/1.1 var(--f-hand); color: var(--f-ink); -webkit-text-stroke: calc(.7 * var(--k)) currentColor; }
 .f-you { position: absolute; left: calc(-17 * var(--k)); top: calc(-15 * var(--k)); padding: 0 calc(6 * var(--k)); border-radius: calc(6 * var(--k)); background: #e6e1cf; -webkit-text-stroke: 0; font: 700 calc(10 * var(--k))/1.5 var(--f-hand); color: var(--f-ink); }
-.f-switch { position: relative; flex: none; width: calc(56 * var(--k)); height: calc(26 * var(--k)); border: 0; border-radius: 99px; background: #b5b0a2; cursor: pointer; padding: 0; transition: background .3s; }
+.f-switch { position: relative; flex: none; width: calc(54 * var(--k)); height: calc(26 * var(--k)); border: 0; border-radius: 99px; background: #b5b0a2; cursor: pointer; padding: 0; transition: background .3s; }
 .f-switch i { position: absolute; top: calc(3 * var(--k)); left: calc(3 * var(--k)); width: calc(20 * var(--k)); height: calc(20 * var(--k)); border-radius: 50%; background: #f7f7f7; transition: transform .3s cubic-bezier(.3, 1.4, .5, 1); }
-.f-switch.is-on { background: var(--f-rose); } .f-switch.is-on i { transform: translateX(calc(30 * var(--k))); }
+.f-switch.is-on { background: var(--f-rose); } .f-switch.is-on i { transform: translateX(calc(28 * var(--k))); }
 .f-switch:disabled { cursor: default; }
 .f-switch:focus-visible { outline: 2px solid var(--f-ink); outline-offset: 2px; }
 .f-row.is-just .f-row-name { animation: m-bump .5s ease-out; }
-.f-check { font: 400 calc(22.5 * var(--k))/calc(26 * var(--k)) 'Thasadith', var(--f-serif); color: var(--f-ink); margin: calc(30 * var(--k)) 0 0; --tx: calc(-28 * var(--k)); }
-.f-res-in > .f-yay { margin-top: calc(3 * var(--k)); font-size: calc(18 * var(--k)); line-height: calc(20 * var(--k)); --tx: calc(-28 * var(--k)); }
-.f-recap { list-style: none; margin: calc(6 * var(--k)) 0 0; padding: calc(9 * var(--k)) calc(26 * var(--k)) calc(12 * var(--k)) calc(14 * var(--k)); box-sizing: border-box; width: calc(370 * var(--k)); --tx: calc(-29 * var(--k)); border-top: calc(1.5 * var(--k)) solid var(--f-line); border-bottom: calc(1.5 * var(--k)) solid var(--f-line); }
+.f-check { font: 400 calc(22.5 * var(--k))/calc(26 * var(--k)) 'Thasadith', var(--f-serif); color: var(--f-ink); margin: calc(32 * var(--k)) 0 0; --tx: calc(-20.5 * var(--k)); }
+.f-res-in > .f-yay { margin-top: calc(3 * var(--k)); font-size: calc(18 * var(--k)); line-height: calc(20 * var(--k)); --tx: calc(-20.5 * var(--k)); }
+.f-recap { list-style: none; margin: calc(3 * var(--k)) 0 0; padding: calc(9 * var(--k)) calc(26 * var(--k)) calc(12 * var(--k)) calc(14 * var(--k)); box-sizing: border-box; width: calc(359 * var(--k)); --tx: calc(-20.5 * var(--k)); border-top: calc(1.5 * var(--k)) solid var(--f-line); border-bottom: calc(1.5 * var(--k)) solid var(--f-line); }
 .f-recap li { display: grid; grid-template-columns: calc(26 * var(--k)) 1fr auto; align-items: baseline; text-align: left; font: 400 calc(18 * var(--k))/calc(18.5 * var(--k)) 'Thasadith', var(--f-serif); }
 .f-recap li.yes { color: #c99293; } .f-recap li.no { color: var(--f-ink); }
 .f-recap .f-gap { height: calc(14 * var(--k)); }
 .f-recap-st { text-align: right; }
-.f-res-in > .f-btn { margin-top: calc(26 * var(--k)); min-width: calc(146 * var(--k)); padding: 0 calc(8 * var(--k)); height: calc(29 * var(--k)); font-size: calc(17 * var(--k)); --tx: calc(-16 * var(--k)); }
+.f-res-in > .f-btn { margin-top: calc(21 * var(--k)); min-width: calc(146 * var(--k)); padding: 0 calc(8 * var(--k)); height: calc(29 * var(--k)); font-size: calc(17 * var(--k)); --tx: calc(-20 * var(--k)); }
 .f-res-in > .f-error { margin-top: calc(10 * var(--k)); }
 
 /* III. A Little Change of Plans? The pink paper sits between the back of the envelope and its front pocket.
@@ -1771,6 +1771,6 @@ span.c-input { display: flex; align-items: center; justify-content: center; }
 /* phones: every Fairy Garden card sits in the middle of the screen (no desktop nudges), and the seats card lines its words up on the screen's centre */
 @media (max-width: 560px) {
   body.is-fairy .f-card-rsvp { translate: 0 -2.6%; }
-  body.is-fairy .f-res { translate: calc(var(--w) * -16 / 706) 0; }
+  body.is-fairy .f-res { translate: calc(var(--w) * -28.5 / 715) 0; }
   body.is-fairy .f-res-in > .f-rows, body.is-fairy .f-res-in > .f-recap, body.is-fairy .f-res-in > .f-check, body.is-fairy .f-res-in > .f-yay, body.is-fairy .f-res-in > .f-btn, body.is-fairy .f-res-in > .f-num { --tx: 0px; }
 }

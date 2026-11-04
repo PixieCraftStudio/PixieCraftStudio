@@ -3833,7 +3833,7 @@ guest: function () {
       const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
         : r.submittedAt && !view ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
       return fPage(`<main class="f-stage f-res" style="${fSize('fairyResSize')}">
-          <div class="f-res-body" style="--rt:url('${esc(F('fairy-res2-top.webp'))}');--rm:url('${esc(F('fairy-res2-mid.png'))}');--rb:url('${esc(F('fairy-res2-bot.webp'))}')">
+          <div class="f-res-body" style="--rt:url('${esc(F('fairy-res3-top.webp'))}');--rm:url('${esc(F('fairy-res3-mid.png'))}');--rb:url('${esc(F('fairy-res3-bot.webp'))}')">
             <div class="f-res-in">
               <p class="f-hand f-reserved" ${fp('reserved', 'fairyReserved')}>${rich('fairyReserved', r)}</p>
               <p class="f-script f-num" ${fp('num')}>${r.seats}</p>
