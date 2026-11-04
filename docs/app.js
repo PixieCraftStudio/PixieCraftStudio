@@ -4631,7 +4631,7 @@ guest: function () {
     previewTarget: '', previewDevice: 'mobile', version: 0, pending: false,
   };
   const PHASE = { open: ['Collecting RSVPs', ''], closed: ['RSVP closed', 'a-pill-closed'], done: ['Event done', 'a-pill-done'] };
-  const TABS = [['guests', 'Guest List'], ['upload', 'Upload RSVP'], ['links', 'RSVP Links'], ['customize', 'Customize'], ['cards', 'Card Maker'], ['wording', 'Wording'], ['preview', 'Preview']];
+  const TABS = [['guests', 'Guest List'], ['upload', 'Upload RSVP'], ['links', 'RSVP Links'], ['customize', 'Customize'], ['wording', 'Wording'], ['preview', 'Preview']];
   const bundleNote = () => P.bundle ? '<div class="a-banner a-banner-info"><span><strong>Try-out version.</strong> This file keeps everything in this browser only. Links you copy here only open on this computer, and nothing syncs to clients or guests. Host the full site for real clients.</span></div>' : '';
   const randomCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
@@ -4770,7 +4770,7 @@ guest: function () {
   // ---------- client workspace ----------
   function viewClient() {
     const c = B.client, [label, cls] = PHASE[c.phase];
-    const body = { guests: B.form ? viewForm : viewGuests, upload: viewUpload, links: viewLinks, customize: viewCustomize, design: viewDesign, cards: viewCards, wording: viewWording, preview: viewPreview }[B.tab]();
+    const body = { guests: B.form ? viewForm : viewGuests, upload: viewUpload, links: viewLinks, customize: viewCustomize, design: viewDesign, wording: viewWording, preview: viewPreview }[B.tab]();
     return `<button class="a-back" data-act="go" data-view="tracker">← All clients</button>
       <div class="a-client-head"><div><h1 class="a-script a-client-title">${esc(c.couple)}</h1>
         <p class="a-muted">Event ${esc(C.formatLong(c.weddingDate))} · RSVP by ${esc(C.formatLong(c.deadline))} <span class="a-pill ${cls}">${label}</span></p></div>
@@ -4950,7 +4950,7 @@ guest: function () {
           <p class="a-muted a-small">Choose which RSVP pages this client’s guests see.</p>
           <div class="a-designs">${Object.entries(m.rsvpDesigns || { classic: 'Classic Garden', fairy: 'Fairy Garden' }).map(([k, l]) => `<button type="button" class="a-design-tile ${(t.rsvpDesign || 'classic') === k ? 'is-on' : ''}" data-act="rsvp-design" data-d="${k}" aria-pressed="${(t.rsvpDesign || 'classic') === k}">
             <span class="a-design-thumb" data-d="${k}" style="background-image:url('${esc(k === 'fairy' ? P.fairy('fairy-card-rsvp.webp') : k === 'custom' ? P.fairy('fairy-tulip.webp') : P.bg)}')"></span><span>${esc(l)}</span></button>`).join('')}</div>
-          ${(t.rsvpDesign || 'classic') === 'custom' ? '<p class="a-muted a-small">“My own cards” are the cards you make in the Card Maker tab.</p>' : ''}
+          ${cardsBlock()}
           <label class="a-field"><span>Invitation link (for the “Back to Invitation” buttons)</span><input data-theme="invitationLink" type="url" value="${esc(t.invitationLink || '')}" placeholder="https://… link to the client’s e-invitation" maxlength="500"></label>
           <p class="a-muted a-small">Used in the Fairy Garden design. Leave it empty to hide those buttons.</p>
           <h4 class="a-h4">Fairy Garden card sizes</h4>
@@ -5145,21 +5145,24 @@ guest: function () {
   }
 
   // ---------- Card Maker: the studio makes this client's own RSVP cards (opens full screen, see cardmaker.js) ----------
-  function viewCards() {
-    const t = B.client.theme, cards = t.cards && t.cards.pages ? t.cards : null, on = t.rsvpDesign === 'custom', K = P.cards;
+  // The client's own cards, inside Customize › RSVP design: see them, edit them, or make new ones.
+  function cardsBlock() {
+    const t = B.client.theme, cards = t.cards && t.cards.pages ? t.cards : null, on = B.themeDraft.rsvpDesign === 'custom', K = P.cards;
+    if (!K) return '';
     const ctx = w => ({ mode: 'thumb', site: B.client.site, theme: t, r: K.sample(), answers: { g1: 'attending', g2: 'attending', g3: 'not_attending' }, who: 'g1', view: false, width: w + 'px' });
-    const names = { classic: 'Classic Garden', fairy: 'Fairy Garden' };
-    return `<section class="a-panel a-stack b-cards">
-        <div class="b-cards-head"><div><h3 class="a-h3">Card Maker</h3>
-          <p class="a-muted">Make this client’s RSVP cards yourself, like in Canva: fonts, sizes, colors, your elements, shapes, crop, remove background, animations and page transitions. Each of the six pages is one step guests go through.</p></div>
-          <button type="button" class="a-btn" data-act="open-cards">${cards ? 'Open Card Maker' : 'Start making cards'}</button></div>
-        <p class="a-banner ${on ? 'a-banner-info' : ''}"><span>${on ? 'Guests see these cards now.' : cards ? `Guests see the ${esc(names[t.rsvpDesign] || 'Classic Garden')} design. Turn on “Guests see these cards” in the Card Maker to use your cards.` : 'No cards made yet. You can start from your Fairy Garden pictures or a blank cream card.'}</span></p>
-        ${cards ? `<div class="b-cards-pages">${K.PAGES.map(([k, l], i) => { const p = cards.pages[k], w = Math.round(Math.min(150, 190 * p.w / p.h)); return `<button type="button" class="b-cards-page" data-act="open-cards" data-page="${k}"><span class="b-cards-thumb" style="background:${esc(K.backdrop(cards).color)}">${K.page(cards, k, ctx(w))}</span><span>${i + 1}. ${esc(l)}</span></button>`; }).join('')}</div>` : ''}
-      </section>`;
+    return `<div class="b-cards ${on ? 'is-on' : ''}">
+        <div class="b-cards-head"><div><h4 class="a-h4">My own cards · Card Maker</h4>
+          <p class="a-muted a-small">${cards ? (on ? 'Guests see these cards. Click a page to edit it.' : 'Pick “My own cards” above to show these to guests. Click a page to edit it.') : 'Make this client’s cards like in Canva: fonts, sizes, your elements, crop, remove background, animations.'}</p></div>
+          <div class="a-row">${cards ? '<button type="button" class="a-btn a-btn-sm" data-act="open-cards">Edit my cards</button>' : ''}<button type="button" class="a-btn a-btn-sm ${cards ? 'a-btn-ghost' : ''}" data-act="new-cards">${cards ? 'Make new cards' : 'Make cards'}</button></div></div>
+        ${cards ? `<div class="b-cards-pages">${K.PAGES.map(([k, l], i) => { const p = cards.pages[k], w = Math.round(Math.min(78, 100 * p.w / p.h)); return `<button type="button" class="b-cards-page" data-act="open-cards" data-page="${k}" title="Edit ${esc(l)}"><span class="b-cards-thumb" style="background:${esc(K.backdrop(cards).color)}">${K.page(cards, k, ctx(w))}</span><span>${i + 1}. ${esc(l)}</span></button>`; }).join('')}</div>` : ''}
+      </div>`;
   }
-  async function openCardMaker(page) {
+  async function openCardMaker(page, fresh) {
+    if (!(await leaveOk())) return;
+    resetDrafts();
+    if (fresh && B.client.theme.cards && !(await U.confirm({ title: 'Make new cards?', message: 'You start from a template. Your current cards stay as they are until you press Save in the Card Maker.', yes: 'Make new cards', no: 'Cancel' }))) return;
     if (!B.studio) await loadStudio();
-    const c = B.client, t = c.theme, lib = () => (B.studio && B.studio.elements) || [];
+    const c = B.client, t = fresh ? Object.assign({}, c.theme, { cards: null }) : c.theme, lib = () => (B.studio && B.studio.elements) || [];
     const putLib = async list => { B.studio = (await api('PUT', '/api/board/studio', { elements: list })).studio; return lib(); };
     P.cardMaker.open({ client: c, cards: t.cards, theme: t, site: c.site, lib: lib(), page,
       customFontLabel: t.customFont ? B.meta.customFont + ' (' + t.customFont.name + ')' : '',
@@ -5527,7 +5530,7 @@ guest: function () {
     // Studio-wide website edits (words, colors, elements) and the "Edit website" button. Only the studio ever reaches this page.
     if (P.siteStart) P.siteStart({ page: 'board', root: app, canEdit: true, site: B.studio && B.studio.site });
     document.title = (B.view === 'client' && B.client ? B.client.couple + ' · ' : '') + 'Pixie’s RSVP Board';
-    if (B.view === 'client' && B.tab === 'cards' && P.cards) { P.cards.paint(app); if (B.client.theme.cards) P.loadFonts(P.cards.fonts(B.client.theme.cards)); }
+    if (B.view === 'client' && B.tab === 'customize' && P.cards) { P.cards.paint(app); if (B.client.theme.cards) P.loadFonts(P.cards.fonts(B.client.theme.cards)); }
     if (withFrame !== false && B.view === 'client' && (B.tab === 'preview' || B.tab === 'customize' || B.tab === 'design')) loadFrame();
     P.motion(app, B.view === 'client' && B.client ? 'client:' + B.client.id + ':' + B.tab : 'tracker');
   }
@@ -5584,6 +5587,7 @@ guest: function () {
         return;
       }
       case 'open-cards': return openCardMaker(b.dataset.page);
+      case 'new-cards': return openCardMaker(null, true);
       case 'logout': if (!(await leaveOk())) return; await P.api('POST', '/api/board/logout', {}).catch(() => {}); B.list = null; B.view = 'tracker'; resetDrafts(); await loadAuth(); return render();
       case 'go': e.preventDefault(); return goView(b.dataset.view);
       case 'modal-bg': if (e.target === b) return goView('tracker'); return;
@@ -5641,7 +5645,8 @@ guest: function () {
       }
       // customize
       case 'palette': { const p = B.meta.palettes[b.dataset.p]; B.themeDraft.palette = b.dataset.p; B.themeDraft.colors = { heading: p.heading, text: p.text, button: p.button, accent: p.accent, card: p.card }; return themeChanged(true); }
-      case 'rsvp-design': B.themeDraft.rsvpDesign = b.dataset.d; return themeChanged(true);
+      case 'rsvp-design': if (b.dataset.d === 'custom' && !(B.client.theme.cards && B.client.theme.cards.pages)) return openCardMaker(null, true);
+        B.themeDraft.rsvpDesign = b.dataset.d; return themeChanged(true);
       case 'bg': if (b.dataset.bg === 'custom' && !B.themeDraft.customBg) { app.querySelector('[data-bind="bgfile"]').click(); return; } B.themeDraft.background = b.dataset.bg; return themeChanged(true);
       case 'cancel-theme': resetDrafts(); render(); return;
       case 'look-device': {
