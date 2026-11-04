@@ -419,7 +419,115 @@
     return { site: out };
   }
   // The guest RSVP pages come in different designs; the studio picks one per client.
-  const RSVP_DESIGNS = { classic: 'Classic Garden', fairy: 'Fairy Garden' };
+  const RSVP_DESIGNS = { classic: 'Classic Garden', fairy: 'Fairy Garden', custom: 'My own cards' };
+  // ---------- Card Maker (jrick 2026-11-04: "admin can create a rsvp card thru the website, like canva features and ui") ----------
+  // theme.cards = { transition, backdrop, pages: { notice|invite|surprise|reservation|change|thanks: { w, h, bg, els: [...] } } }.
+  // Sizes are design pixels of the page; guests see the page scaled to their screen, so it keeps its shape on phones.
+  const CARD_PAGES = ['notice', 'invite', 'surprise', 'reservation', 'change', 'thanks'];
+  // The working parts of each page (the name box, buttons, the guest list...). Required ones can't be deleted.
+  const CARD_PARTS = { notice: ['next'], invite: ['namebox', 'find'], surprise: ['next'], reservation: ['guestlist', 'submit', 'recap'], change: ['choices', 'save'], thanks: ['link'] };
+  const CARD_REQUIRED = { notice: ['next'], invite: ['namebox', 'find'], surprise: ['next'], reservation: ['guestlist', 'submit'], change: ['choices', 'save'], thanks: [] };
+  const CARD_EXTRA_FONTS = ['Homemade Apple', 'Fuzzy Bubbles', 'Gilda Display', 'Cedarville Cursive'];
+  const CARD_BUILTIN_IMG = /^fairy-[a-z0-9-]{1,40}\.(webp|png|jpg)$/;
+  const CARD_ANIM_IN = ['none', 'fade', 'rise', 'drop', 'pop', 'zoom', 'left', 'right', 'spin', 'blur', 'wipe'];
+  const CARD_ANIM_LOOP = ['none', 'float', 'sway', 'pulse', 'twinkle', 'spin'];
+  const CARD_SHAPES = ['rect', 'circle', 'heart', 'star', 'line', 'arch', 'blob', 'frame'];
+  const CARD_TRANSITIONS = ['none', 'fade', 'slide', 'zoom', 'rise', 'flip'];
+  const CARD_EFFECTS = ['none', 'shadow', 'outline', 'glow', 'lift'];
+  function cleanCards(d, customFontOk) {
+    if (d === null) return { cards: null };
+    if (!d || typeof d !== 'object' || !d.pages || typeof d.pages !== 'object') return { error: 'The cards could not be read. Please try again.' };
+    const num = inRange, hex = v => /^#[0-9a-fA-F]{6}$/.test(v || ''), col = v => v === 'transparent' || hex(v), bool = v => !!v;
+    const fonts = ALL_FONT_LIST.concat(CARD_EXTRA_FONTS), fontOk = f => fonts.includes(f) || (f === CUSTOM_FONT && customFontOk);
+    const img = v => IMAGE_REF.test(v || '') || CARD_BUILTIN_IMG.test(v || '');
+    const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
+    const bad = m => ({ error: m });
+    const out = { transition: CARD_TRANSITIONS.includes(d.transition) ? d.transition : 'fade', backdrop: {}, pages: {} };
+    const bd = d.backdrop || {};
+    if (bd.color) { if (!col(bd.color)) return bad('The backdrop color must look like #c27390.'); out.backdrop.color = bd.color.toLowerCase(); }
+    if (bd.src) { if (!img(bd.src)) return bad('Please choose the backdrop picture again.'); out.backdrop.src = bd.src; }
+    if (bd.blur !== undefined) { if (!num(bd.blur, 0, 30)) return bad('Backdrop blur is out of range.'); out.backdrop.blur = r1(bd.blur); }
+    for (const [key, pg] of Object.entries(d.pages)) {
+      if (!CARD_PAGES.includes(key)) return bad('Unknown page in the cards.');
+      if (!pg || typeof pg !== 'object' || !num(pg.w, 200, 1400) || !num(pg.h, 200, 2400)) return bad('A page size is out of range (200 to 1400 wide).');
+      const bg = pg.bg || {}, o = { w: Math.round(pg.w), h: Math.round(pg.h), bg: {}, els: [] };
+      if (bg.color !== undefined) { if (!col(bg.color)) return bad('Page colors must look like #c27390.'); o.bg.color = bg.color.toLowerCase(); }
+      if (bg.src) { if (!img(bg.src)) return bad('Please choose the page picture again.'); o.bg.src = bg.src; o.bg.fit = bg.fit === 'contain' ? 'contain' : bg.fit === 'stretch' ? 'stretch' : 'cover'; }
+      if (bg.radius !== undefined) { if (!num(bg.radius, 0, 300)) return bad('Page corners are out of range.'); o.bg.radius = Math.round(bg.radius); }
+      if (bg.shadow) o.bg.shadow = true;
+      if (!Array.isArray(pg.els) || pg.els.length > 150) return bad('A page can hold up to 150 elements.');
+      const seen = new Set(), parts = new Set();
+      for (const e of pg.els) {
+        if (!e || typeof e !== 'object' || !/^[a-z0-9]{4,24}$/.test(e.id || '') || seen.has(e.id)) return bad('An element in the cards is not valid.');
+        seen.add(e.id);
+        if (!num(e.x, -3000, 5000) || !num(e.y, -3000, 8000) || !num(e.w, 1, 5000) || !num(e.h, 1, 8000)) return bad('An element is placed too far off the page.');
+        const el = { id: e.id, type: e.type, x: r1(e.x), y: r1(e.y), w: r1(e.w), h: r1(e.h) };
+        if (e.rot) { if (!num(e.rot, -360, 360)) return bad('An element is turned too far.'); el.rot = r1(e.rot); }
+        if (e.op !== undefined && e.op !== 1) { if (!num(e.op, 0.02, 1)) return bad('Transparency is out of range.'); el.op = Math.round(e.op * 100) / 100; }
+        for (const f of ['flipX', 'flipY', 'lock']) if (e[f]) el[f] = true;
+        if (e.anim) {
+          const a = e.anim, an = {};
+          if (a.in && a.in !== 'none') { if (!CARD_ANIM_IN.includes(a.in)) return bad('Unknown animation.'); an.in = a.in; }
+          if (a.loop && a.loop !== 'none') { if (!CARD_ANIM_LOOP.includes(a.loop)) return bad('Unknown animation.'); an.loop = a.loop; }
+          if (a.delay !== undefined) { if (!num(a.delay, 0, 10)) return bad('Animation delay goes up to 10 seconds.'); an.delay = r1(a.delay); }
+          if (a.dur !== undefined) { if (!num(a.dur, 0.2, 8)) return bad('Animation speed is out of range.'); an.dur = r1(a.dur); }
+          if (Object.keys(an).length) el.anim = an;
+        }
+        if (e.type === 'text') {
+          el.text = cleanText(e.text, 1000) || 'Your text';
+          if (!fontOk(e.font)) return bad('Unknown font in a text box.');
+          if (!num(e.size, 2, 600)) return bad('Text size is out of range.');
+          if (!hex(e.color)) return bad('Text colors must look like #c27390.');
+          Object.assign(el, { font: e.font, size: r1(e.size), color: e.color.toLowerCase(), align: ['left', 'center', 'right', 'justify'].includes(e.align) ? e.align : 'center' });
+          for (const f of ['bold', 'italic', 'underline', 'upper']) if (e[f]) el[f] = true;
+          if (e.ls) { if (!num(e.ls, -20, 200)) return bad('Letter spacing is out of range.'); el.ls = r1(e.ls); }
+          if (e.lh !== undefined) { if (!num(e.lh, 0.5, 4)) return bad('Line spacing is out of range.'); el.lh = Math.round(e.lh * 100) / 100; }
+          if (e.effect && e.effect !== 'none') { if (!CARD_EFFECTS.includes(e.effect)) return bad('Unknown text effect.'); el.effect = e.effect; if (e.ecolor) { if (!hex(e.ecolor)) return bad('Effect colors must look like #c27390.'); el.ecolor = e.ecolor.toLowerCase(); } }
+        } else if (e.type === 'image') {
+          if (!img(e.src)) return bad('Please add that picture again.');
+          el.src = e.src;
+          if (e.orig && img(e.orig)) el.orig = e.orig;
+          if (e.crop) {
+            const c = e.crop, ok = ['l', 't', 'r', 'b'].every(k => num(c[k] || 0, 0, 0.98)) && (c.l || 0) + (c.r || 0) < 0.98 && (c.t || 0) + (c.b || 0) < 0.98;
+            if (!ok) return bad('The crop is out of range.');
+            if (c.l || c.t || c.r || c.b) el.crop = { l: r3(c.l || 0), t: r3(c.t || 0), r: r3(c.r || 0), b: r3(c.b || 0) };
+          }
+          if (e.radius) { if (!num(e.radius, 0, 50)) return bad('Rounded corners are out of range.'); el.radius = r1(e.radius); }
+          if (e.adj) {
+            const a = e.adj, ad = {};
+            for (const [k, lo, hi, def] of [['b', 0, 200, 100], ['c', 0, 200, 100], ['s', 0, 200, 100], ['bl', 0, 20, 0], ['g', 0, 100, 0]]) {
+              if (a[k] === undefined || a[k] === def) continue;
+              if (!num(a[k], lo, hi)) return bad('A picture adjustment is out of range.'); ad[k] = r1(a[k]);
+            }
+            if (Object.keys(ad).length) el.adj = ad;
+          }
+          if (e.shadow) el.shadow = true;
+          if (e.bw) { if (!num(e.bw, 0, 60) || !hex(e.bc)) return bad('The picture border is not valid.'); el.bw = r1(e.bw); el.bc = e.bc.toLowerCase(); }
+        } else if (e.type === 'shape') {
+          if (!CARD_SHAPES.includes(e.shape)) return bad('Unknown shape.');
+          if (!col(e.fill || 'transparent')) return bad('Shape colors must look like #c27390.');
+          el.shape = e.shape; el.fill = (e.fill || 'transparent').toLowerCase();
+          if (e.sw) { if (!num(e.sw, 0, 80) || !hex(e.stroke)) return bad('The shape border is not valid.'); el.sw = r1(e.sw); el.stroke = e.stroke.toLowerCase(); }
+          if (e.radius) { if (!num(e.radius, 0, 1000)) return bad('Rounded corners are out of range.'); el.radius = r1(e.radius); }
+        } else if (e.type === 'part') {
+          if (!(CARD_PARTS[key] || []).includes(e.kind) || parts.has(e.kind)) return bad('A working part is not valid on this page.');
+          parts.add(e.kind); el.kind = e.kind;
+          if (e.font !== undefined) { if (!fontOk(e.font)) return bad('Unknown font on a working part.'); el.font = e.font; }
+          if (e.size !== undefined) { if (!num(e.size, 2, 300)) return bad('Text size is out of range.'); el.size = r1(e.size); }
+          for (const f of ['color', 'on', 'line']) if (e[f] !== undefined) { if (!hex(e[f])) return bad('Colors must look like #c27390.'); el[f] = e[f].toLowerCase(); }
+          if (e.fill !== undefined) { if (!col(e.fill)) return bad('Colors must look like #c27390.'); el.fill = e.fill.toLowerCase(); }
+          if (e.radius !== undefined) { if (!num(e.radius, 0, 500)) return bad('Rounded corners are out of range.'); el.radius = r1(e.radius); }
+          for (const f of ['label', 'label2', 'ph', 'yes', 'no']) if (e[f] !== undefined) el[f] = cleanText(e[f], 120);
+          if (e.bold) el.bold = true; if (e.italic) el.italic = true; if (e.upper) el.upper = true;
+        } else return bad('An element in the cards is not valid.');
+        o.els.push(el);
+      }
+      for (const k of CARD_REQUIRED[key]) if (!parts.has(k)) return bad(`The ${({ notice: 'Kindly RSVP', invite: 'Hello', surprise: 'Surprise', reservation: 'Seats', change: 'Change of plans', thanks: 'Thank you' })[key]} page needs its ${({ next: 'button', namebox: 'name box', find: 'Find button', guestlist: 'guest list', submit: 'Send button', choices: 'yes / no choices', save: 'Save button' })[k]}.`);
+      out.pages[key] = o;
+    }
+    if (JSON.stringify(out).length > 400000) return bad('The cards are too big to save. Please remove some elements.');
+    return { cards: out };
+  }
   function defaultTheme() {
     return { palette: 'garden', colors: Object.assign({}, PALETTES.garden), headingFont: 'Italianno', headingItalic: false,
       bodyFont: 'Della Respira', scriptFont: 'Great Vibes', background: 'garden', customBg: null, blur: true, logo: null, video: null, customFont: null,
@@ -490,6 +598,11 @@
       if (d.error) return d;
       t.decor = d.decor;
     }
+    if (body.cards !== undefined) {
+      const d = cleanCards(body.cards, !!t.customFont);
+      if (d.error) return d;
+      t.cards = d.cards;
+    }
     if (body.parts !== undefined) {
       const d = cleanParts(body.parts, !!t.customFont);
       if (d.error) return d;
@@ -510,6 +623,7 @@
       t[k] = n;
     }
     if (t.background === 'custom' && !t.customBg) return { error: 'Please upload a photo for the background first.' };
+    if (t.rsvpDesign === 'custom' && !(t.cards && t.cards.pages && CARD_PAGES.every(k => t.cards.pages[k]))) return { error: 'Please make and save your cards in the Card Maker first.' };
     return { theme: t };
   }
   // Clients still on the first default look move to the current main design (their background and uploads are kept).
@@ -1014,7 +1128,7 @@
   }
 
   return {
-    DEFAULT_SITE, STATUSES, PALETTES, RSVP_DESIGNS, FLOOR_ITEMS, TABLE_SHAPES, cleanPlanner, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, FAIRY_PARTS, cleanParts, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
+    DEFAULT_SITE, STATUSES, PALETTES, RSVP_DESIGNS, FLOOR_ITEMS, TABLE_SHAPES, cleanPlanner, HEADING_FONTS, BODY_FONTS, SCRIPT_FONTS, FONT_GROUPS, CUSTOM_FONT, BACKGROUNDS, VIDEO_REF, IMAGE_REF, DECOR_SCREENS, DECOR_HIDE, FAIRY_PARTS, cleanParts, CARD_PAGES, CARD_PARTS, CARD_REQUIRED, CARD_EXTRA_FONTS, CARD_ANIM_IN, CARD_ANIM_LOOP, CARD_SHAPES, CARD_TRANSITIONS, CARD_EFFECTS, cleanCards, SITE_PAGES, SITE_COLORS, cleanSite, EFFECTS, defaultData, upgradeData, upgradeSite, defaultTheme, groupRows,
     handle, stats, fill, isClosed, deadlineEnd, formatDeadline, formatWeddingDate, formatLong, formatPadded, validDate, normName,
   };
 });
@@ -2149,6 +2263,1253 @@
   }
 })();
 
+// Card Maker cards: draws a page the studio designed (text, pictures, shapes and the working parts) for guests,
+// for the editor and for the small page thumbnails. The same drawing is used everywhere, so what the studio sees is what guests get.
+(function () {
+  'use strict';
+  const P = window.PIXIE = window.PIXIE || {}, C = window.PixieCore;
+  const esc = s => P.esc ? P.esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const K = {};
+  K.PAGES = [['notice', 'Kindly RSVP'], ['invite', 'Hello'], ['surprise', 'Surprise'], ['reservation', 'Seats'], ['change', 'Change of plans'], ['thanks', 'Thank you']];
+  K.PAGE_HELP = {
+    notice: 'The first card guests see.',
+    invite: 'Guests type their name here to find their seats.',
+    surprise: 'Shown to people in a group who aren’t the representative.',
+    reservation: 'The representative switches each name on or off and sends the answer. Afterwards everyone sees it here.',
+    change: 'Opens from “Change of Mind?”. A guest changes only their own answer.',
+    thanks: 'Shown after an answer is sent.',
+  };
+  K.PART_LABELS = { next: 'Next button', namebox: 'Name box', find: 'Find button', guestlist: 'Guest list with switches', submit: 'Send button', recap: 'Answers summary', choices: 'Yes / No choices', save: 'Save button', link: 'Link button' };
+  K.newId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), x => (x % 36).toString(36)).join('');
+  const BTN = { font: 'Gilda Display', size: 13, color: '#fef9f5', fill: '#c79293', radius: 99 };
+  K.partDefaults = function (kind, page) {
+    const d = {
+      next: Object.assign({ label: 'NEXT', w: 110, h: 28 }, BTN),
+      find: Object.assign({ label: 'FIND MY SEAT', w: 130, h: 28 }, BTN),
+      submit: Object.assign({ label: 'SUBMIT', label2: 'Change of Mind?', w: 150, h: 30 }, BTN),
+      save: Object.assign({ label: 'Save My Answer', w: 160, h: 32 }, BTN),
+      link: { label: 'Back to Invitation', font: 'Gilda Display', size: 14, color: '#4a5232', fill: 'transparent', radius: 99, w: 200, h: 26 },
+      namebox: { ph: 'First Name Last Name', font: 'Gilda Display', size: 11, color: '#4a5232', fill: '#e6e1cf', radius: 8, w: 230, h: 28 },
+      guestlist: { font: 'Fuzzy Bubbles', size: 16, color: '#4a5232', on: '#c79293', line: '#d9d2bd', w: 280, h: 170 },
+      recap: { font: 'Gilda Display', size: 12.5, color: '#c4898b', line: '#d9d2bd', w: 290, h: 110 },
+      choices: { yes: 'yes, i’ll be there!', no: 'sorry, i can’t make it!', font: 'Gilda Display', size: 16, color: '#4a5232', on: '#fef9f5', fill: '#e6e1cf', w: 240, h: 60 },
+    }[kind];
+    if (kind === 'next' && page === 'surprise') d.label = 'NEXT';
+    return Object.assign({ type: 'part', kind }, d);
+  };
+
+  // {couple} {deadline} {date} {family} {seats} {rep} {name} {first} {coming} {total}
+  K.fill = function (text, ctx) {
+    const site = (ctx && ctx.site) || C.DEFAULT_SITE, r = ctx && ctx.r;
+    let out = C.fill(text, Object.assign({ couple: '', deadline: '', weddingDate: '' }, site), r);
+    const me = r && (r.guests.find(g => g.id === (ctx.who || r.repId)) || r.guests[0]);
+    const going = r ? r.guests.filter(g => (ctx.answers || {})[g.id] === 'attending').length : 0;
+    return out.replace(/\{name\}/g, me ? me.name : '').replace(/\{first\}/g, me ? (me.name || '').trim().split(/\s+/)[0] : '')
+      .replace(/\{coming\}/g, String(going)).replace(/\{total\}/g, r ? String(r.guests.length) : '');
+  };
+  // Sample group for the editor and thumbnails.
+  K.sample = () => ({ token: 'sample', family: 'The Martinez Family', seats: 3, repId: 'g1', rep: 'Maria Martinez', submittedAt: null,
+    guests: [{ id: 'g1', name: 'Maria Martinez', status: 'attending' }, { id: 'g2', name: 'John Cua', status: 'attending' }, { id: 'g3', name: 'Coby Martinez', status: 'not_attending' }] });
+
+  const u = v => `calc(${+v || 0} * var(--u))`;
+  const FONT = f => `'${esc(P.fontFamily ? P.fontFamily(f) : f)}'`;
+  const imgSrc = s => /^fairy-/.test(s) ? (P.fairy ? P.fairy(s) : '/' + s) : '';
+  const SHAPE_PATH = {
+    heart: 'M50 92 C20 70 2 52 2 30 C2 14 14 4 28 4 C38 4 46 10 50 18 C54 10 62 4 72 4 C86 4 98 14 98 30 C98 52 80 70 50 92Z',
+    star: 'M50 3 L61.8 36.6 L97.6 37.6 L69.1 59.4 L79.4 93.4 L50 73.2 L20.6 93.4 L30.9 59.4 L2.4 37.6 L38.2 36.6Z',
+    arch: 'M1 99 V48 A49 47 0 0 1 99 48 V99 Z',
+    blob: 'M50 3 C75 2 97 19 96 46 C95 73 78 97 50 97 C23 97 4 77 4 50 C4 23 25 4 50 3Z',
+  };
+  function textStyle(e) {
+    const ec = e.ecolor || (e.effect === 'glow' ? '#fff3c4' : e.effect === 'outline' ? '#ffffff' : '#000000');
+    const fx = { shadow: `text-shadow:${u(e.size * .05)} ${u(e.size * .05)} ${u(e.size * .12)} ${ec}66;`, glow: `text-shadow:0 0 ${u(e.size * .25)} ${ec},0 0 ${u(e.size * .5)} ${ec};`,
+      outline: `-webkit-text-stroke:${u(Math.max(.6, e.size * .045))} ${ec};paint-order:stroke fill;`, lift: `text-shadow:0 ${u(e.size * .08)} ${u(e.size * .3)} rgba(0,0,0,.28);` }[e.effect] || '';
+    return `font-family:${FONT(e.font)};font-size:${u(e.size)};color:${e.color};text-align:${e.align || 'center'};line-height:${e.lh || 1.25};`
+      + (e.bold ? 'font-weight:700;' : '') + (e.italic ? 'font-style:italic;' : '') + (e.underline ? 'text-decoration:underline;' : '') + (e.upper ? 'text-transform:uppercase;' : '')
+      + (e.ls ? `letter-spacing:${e.ls / 1000}em;` : '') + fx;
+  }
+  function partFont(e) {
+    return `font-family:${FONT(e.font || 'Gilda Display')};font-size:${u(e.size || 13)};color:${e.color || '#4a5232'};` + (e.bold ? 'font-weight:700;' : '') + (e.italic ? 'font-style:italic;' : '') + (e.upper ? 'text-transform:uppercase;' : '');
+  }
+  function shapeHtml(e) {
+    const stroke = e.sw ? `${u(e.sw)} solid ${e.stroke}` : '0';
+    if (e.shape === 'rect' || e.shape === 'frame') return `<div class="c-shape" style="background:${e.shape === 'frame' ? 'transparent' : e.fill};border:${e.shape === 'frame' && !e.sw ? `${u(4)} solid ${e.stroke || '#4a5232'}` : stroke};border-radius:${u(e.radius || 0)}"></div>`;
+    if (e.shape === 'circle') return `<div class="c-shape" style="background:${e.fill};border:${stroke};border-radius:50%"></div>`;
+    if (e.shape === 'line') return `<div class="c-shape" style="background:${e.fill === 'transparent' ? (e.stroke || '#4a5232') : e.fill};border-radius:${u(e.radius || 0)}"></div>`;
+    return `<svg class="c-shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="${SHAPE_PATH[e.shape]}" fill="${e.fill}" ${e.sw ? `stroke="${e.stroke}" vector-effect="non-scaling-stroke" style="stroke-width:${u(e.sw)}"` : ''}/></svg>`;
+  }
+  function imageHtml(e) {
+    const c = e.crop || {}, fw = 1 - (c.l || 0) - (c.r || 0), fh = 1 - (c.t || 0) - (c.b || 0), a = e.adj || {};
+    const filt = [a.b !== undefined && `brightness(${a.b}%)`, a.c !== undefined && `contrast(${a.c}%)`, a.s !== undefined && `saturate(${a.s}%)`, a.g && `grayscale(${a.g}%)`, a.bl && `blur(${u(a.bl)})`].filter(Boolean).join(' ');
+    return `<div class="c-img" style="border-radius:${e.radius || 0}%;${e.bw ? `border:${u(e.bw)} solid ${e.bc};` : ''}${e.shadow ? 'box-shadow:0 6px 18px rgba(40,40,20,.28);' : ''}">`
+      + `<img alt="" draggable="false" ${imgSrc(e.src) ? `src="${esc(imgSrc(e.src))}"` : `data-csrc="${esc(e.src)}"`} style="width:${100 / fw}%;height:${100 / fh}%;left:${-(c.l || 0) / fw * 100}%;top:${-(c.t || 0) / fh * 100}%;${filt ? `filter:${filt};` : ''}"></div>`;
+  }
+  function btn(e, label, act, ctx, extra) {
+    const dis = ctx.mode !== 'guest' ? 'tabindex="-1"' : '';
+    return `<button type="${extra === 'form' ? 'submit' : 'button'}" class="c-btn" ${extra === 'form' ? 'form="c-search"' : ''} ${act ? `data-act="${act}"` : ''} ${dis} ${ctx.busy && ctx.mode === 'guest' ? 'disabled' : ''}
+      style="${partFont(e)}background:${e.fill || 'transparent'};border-radius:${u(e.radius || 0)}">${esc(K.fill(label, ctx))}</button>`;
+  }
+  function partHtml(e, page, ctx) {
+    const r = ctx.r, live = ctx.mode === 'guest';
+    switch (e.kind) {
+      case 'next': {
+        const act = page === 'surprise' ? (r && r.submittedAt ? 'f-viewonly' : 'f-again') : 'f-next';
+        return btn(e, e.label || 'NEXT', live ? act : '', ctx);
+      }
+      case 'find': return btn(e, ctx.busy ? 'Finding…' : e.label || 'FIND MY SEAT', '', ctx, 'form');
+      case 'namebox':
+        return `<input class="c-input" ${live ? 'id="g-name" name="name" form="c-search" autocomplete="name" required' : 'tabindex="-1" readonly'} aria-label="Your first name and last name" placeholder="${esc(e.ph || '')}"
+          style="${partFont(e)}background:${e.fill || '#fff'};border-radius:${u(e.radius || 0)}">`;
+      case 'save':
+        if (ctx.closed) return '';
+        return btn(e, ctx.busy ? 'Saving…' : e.label || 'Save My Answer', live ? 'f-save' : '', ctx);
+      case 'submit': {
+        if (ctx.closed) return '';
+        if (ctx.view) return btn(e, e.label2 || 'Change of Mind?', live ? 'f-mind' : '', ctx);
+        return btn(e, ctx.busy ? 'Sending…' : e.label || 'SUBMIT', live ? 'f-submit' : '', ctx);
+      }
+      case 'link': {
+        const link = ctx.theme && ctx.theme.invitationLink, label = esc(K.fill(e.label || 'Back to Invitation', ctx));
+        const st = `style="${partFont(e)}background:${e.fill || 'transparent'};border-radius:${u(e.radius || 0)}"`;
+        if (live && link) return `<a class="c-btn c-linkbtn" href="${esc(link)}" target="_top" rel="noopener" ${st}>${label}</a>`;
+        return `<button type="button" class="c-btn c-linkbtn" ${live ? 'data-act="f-again"' : 'tabindex="-1"'} ${st}>${label}</button>`;
+      }
+      case 'guestlist': {
+        const me = ctx.who || (r && r.repId), rows = (r ? r.guests : []).map(g => {
+          const on = (ctx.answers || {})[g.id] === 'attending';
+          return `<li class="c-row ${g.id === ctx.justAnswered ? 'is-just' : ''}"><span class="c-row-name">${g.id === me && live ? '<span class="c-you">You</span>' : ''}${esc(g.name)}</span>
+            <button type="button" class="c-switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(g.name)} is coming" ${live ? `data-act="f-toggle" data-g="${g.id}"` : 'tabindex="-1"'} ${ctx.closed || ctx.view ? 'disabled' : ''}><i></i></button></li>`;
+        }).join('');
+        const note = ctx.closed && live ? `<li class="c-note">The RSVP deadline (${esc(C.formatDeadline(ctx.site.deadline))}) has passed, so answers can no longer be changed here.</li>` : '';
+        return `<ul class="c-list" style="${partFont(e)}--on:${e.on || '#c79293'};--line:${e.line || '#d9d2bd'}">${note}${rows}</ul>`;
+      }
+      case 'recap': {
+        const gs = r ? r.guests : [], yes = gs.filter(g => (ctx.answers || {})[g.id] === 'attending'), no = gs.filter(g => (ctx.answers || {})[g.id] !== 'attending');
+        const site = ctx.site || C.DEFAULT_SITE, item = (g, y) => `<li class="${y ? 'yes' : 'no'}"><span>${y ? '✓' : '✕'}</span><span>${esc(g.name)}</span><span>${esc(C.fill(y ? site.attendingLabel || 'Attending' : site.notAttendingLabel || 'Not attending', site))}</span></li>`;
+        return `<div class="c-recap" style="${partFont(e)}--line:${e.line || '#d9d2bd'}"><p class="c-yay">${yes.length ? `Yay! ${yes.length} out of ${gs.length} ${yes.length === 1 ? 'is' : 'are'} coming!` : 'No one is coming? We’ll miss you!'}</p>
+          <ul>${yes.map(g => item(g, true)).join('')}${no.map(g => item(g, false)).join('')}</ul></div>`;
+      }
+      case 'choices': {
+        const me = r && (r.guests.find(g => g.id === (ctx.who || r.repId)) || r.guests[0]);
+        const v = ctx.mine || (me && me.status === 'not_attending' ? 'not_attending' : 'attending');
+        const opt = (val, label) => `<button type="button" class="c-opt" role="radio" aria-checked="${v === val}" ${live ? `data-act="f-pick" data-v="${val}"` : 'tabindex="-1"'} ${ctx.closed ? 'disabled' : ''}>
+          <span class="c-tog ${v === val ? 'is-on' : ''}"><i></i></span><span>${esc(K.fill(label, ctx))}</span></button>`;
+        return `<div class="c-opts" role="radiogroup" aria-label="${esc(me ? me.name : 'Your answer')}" style="${partFont(e)}--on:${e.on || '#fef9f5'};--off:${e.fill || '#e6e1cf'}">${opt('attending', e.yes || 'Yes')}${opt('not_attending', e.no || 'No')}</div>`;
+      }
+    }
+    return '';
+  }
+  function elHtml(e, i, page, ctx) {
+    const a = e.anim || {}, anim = ctx.mode !== 'thumb' && !ctx.still;
+    const style = `left:${u(e.x)};top:${u(e.y)};width:${u(e.w)};${e.type === 'text' ? '' : `height:${u(e.h)};`}${e.rot ? `rotate:${e.rot}deg;` : ''}${e.op !== undefined && e.op !== 1 ? `opacity:${e.op};` : ''}z-index:${i + 1};`
+      + (anim && (a.in || a.loop) ? `--ad:${a.delay || 0}s;--at:${a.dur || (a.in === 'wipe' ? 1.6 : 0.8)}s;` : '');
+    const flip = e.flipX || e.flipY ? ` style="scale:${e.flipX ? -1 : 1} ${e.flipY ? -1 : 1}"` : '';
+    let inner = '';
+    if (e.type === 'text') inner = `<div class="c-text" style="${textStyle(e)}">${esc(K.fill(e.text, ctx))}</div>`;
+    else if (e.type === 'image') inner = imageHtml(e);
+    else if (e.type === 'shape') inner = shapeHtml(e);
+    else if (e.type === 'part') inner = partHtml(e, page, ctx);
+    return `<div class="c-el c-t-${e.type}${e.type === 'part' ? ' c-p-' + e.kind : ''}" data-el="${esc(e.id)}"${anim && a.in ? ` data-in="${a.in}"` : ''} style="${style}">`
+      + `<div class="c-loop"${anim && a.loop ? ` data-loop="${a.loop}"` : ''}><div class="c-flip"${flip}>${inner}</div></div></div>`;
+  }
+  // One page. ctx: { mode: 'guest' | 'edit' | 'thumb', site, theme, r, answers, who, view, closed, busy, mine, still }
+  K.page = function (cards, key, ctx) {
+    const pg = cards && cards.pages && cards.pages[key];
+    if (!pg) return '';
+    const bg = pg.bg || {}, fit = bg.fit === 'stretch' ? '100% 100%' : bg.fit || 'cover';
+    const bgi = bg.src ? (imgSrc(bg.src) ? `background-image:url('${esc(imgSrc(bg.src))}');` : '') : '';
+    const style = `aspect-ratio:${pg.w} / ${pg.h};background-color:${bg.color || 'transparent'};${bgi}background-size:${fit};border-radius:${u(bg.radius || 0)};`;
+    const form = key === 'invite' && ctx.mode === 'guest' ? '<form id="c-search" data-form="search" novalidate hidden></form>' : '';
+    // The stage is the size box (a container), the page fills it: every size inside is design pixels × --u.
+    return `<div class="c-stage${ctx.mode === 'guest' ? ' c-guest' : ''}" data-tr="${esc((cards.transition) || 'fade')}" style="--pw:${pg.w};--ph:${pg.h};${ctx.width ? `width:${ctx.width};` : ''}"><main class="c-page${bg.shadow ? ' c-shadow' : ''}${ctx.mode === 'edit' ? ' c-edit' : ''}${ctx.mode === 'thumb' ? ' c-thumb' : ''}" data-page="${key}" ${bg.src && !bgi ? `data-cbg="${esc(bg.src)}"` : ''} style="${style}">`
+      + `${form}${pg.els.map((e, i) => thumbSafe(elHtml(e, i, key, ctx), ctx)).join('')}</main></div>`;
+  };
+  // Thumbnails sit inside buttons, and a button can't hold buttons, boxes or links: draw those as plain spans there.
+  function thumbSafe(html, ctx) {
+    if (ctx.mode !== 'thumb') return html;
+    return html.replace(/<input ([^>]*?)placeholder="([^"]*)"([^>]*)>/g, '<span $1$3>$2</span>').replace(/<input [^>]*>/g, '<span class="c-input"></span>')
+      .replace(/<(button|a)(\s)/g, '<span$2').replace(/<\/(button|a)>/g, '</span>');
+  }
+  // Pictures uploaded by the studio are fetched after the page is drawn.
+  K.paint = function (root) {
+    root.querySelectorAll('img[data-csrc]').forEach(async img => {
+      const ref = img.dataset.csrc; img.removeAttribute('data-csrc');
+      const s = await P.mediaUrl(ref).catch(() => null); if (s) img.src = s;
+    });
+    root.querySelectorAll('[data-cbg]').forEach(async el => {
+      const ref = el.dataset.cbg; el.removeAttribute('data-cbg');
+      const s = await P.mediaUrl(ref).catch(() => null); if (s) el.style.backgroundImage = `url("${s}")`;
+    });
+  };
+  K.backdrop = function (cards) {
+    const b = (cards && cards.backdrop) || {};
+    return { color: b.color || '#f4efe2', src: b.src || null, blur: b.blur || 0 };
+  };
+  K.fonts = function (cards) {
+    const out = new Set();
+    for (const pg of Object.values((cards && cards.pages) || {})) for (const e of pg.els) if (e.font) out.add(e.font);
+    for (const pg of Object.values((cards && cards.pages) || {})) for (const e of pg.els) if (e.type === 'part' && !e.font) out.add('Gilda Display');
+    return [...out];
+  };
+
+  // ---------- ready-made starting points (Templates) ----------
+  const T = (o, extra) => Object.assign({ id: K.newId(), rot: 0 }, o, extra || {});
+  const tx = (text, x, y, w, size, font, color, more) => T(Object.assign({ type: 'text', text, x, y, w, h: size * 1.4, size, font, color, align: 'center' }, more || {}));
+  const im = (src, x, y, w, h, more) => T(Object.assign({ type: 'image', src, x, y, w, h }, more || {}));
+  const pt = (kind, page, x, y, more) => { const d = K.partDefaults(kind, page); return T(Object.assign(d, { x, y }, more || {})); };
+  const ink = '#4a5232', text = '#4a5232', F = { script: 'Homemade Apple', hand: 'Fuzzy Bubbles', serif: 'Gilda Display', num: 'Cedarville Cursive' };
+const D = k => C.DEFAULT_SITE[k] || '';
+  K.templates = [
+    { id: 'fairy', name: 'Fairy Garden', note: 'Your Fairy Garden pictures, ready to change.', make() {
+      return { transition: 'fade', backdrop: { src: 'fairy-bg.jpg' }, pages: {
+        notice: { w: 403, h: 536, bg: { src: 'fairy-card-rsvp.webp', fit: 'stretch' }, els: [
+          im('fairy-t-kindly.webp', 132, 118, 155, 86, { anim: { in: 'wipe', dur: 1.4 } }),
+          tx(D('fairySubtitle'), 114, 228, 187, 21.5, F.hand, ink, { anim: { in: 'rise', delay: .3 } }),
+          tx(D('fairyMessage'), 114, 268, 187, 13.3, F.serif, text, { lh: 1.33, anim: { in: 'rise', delay: .45 } }),
+          tx(D('fairyClosing'), 114, 372, 187, 13.3, F.serif, text, { anim: { in: 'rise', delay: .55 } }),
+          pt('next', 'notice', 152, 405, { w: 100, h: 25, anim: { in: 'pop', delay: .7 } })] },
+        invite: { w: 419, h: 556, bg: { src: 'fairy-card-name.webp', fit: 'stretch' }, els: [
+          tx(D('fairyHello'), 90, 182, 233, 28, F.script, ink, { anim: { in: 'rise' } }),
+          tx(D('fairyAsk'), 90, 228, 233, 19.9, F.hand, ink, { anim: { in: 'rise', delay: .1 } }),
+          tx(D('fairyAskSub'), 90, 254, 233, 12.65, F.serif, text, { anim: { in: 'rise', delay: .2 } }),
+          pt('namebox', 'invite', 90, 293, { ph: D('fairyPlaceholder'), size: 9.6, w: 233, h: 26, anim: { in: 'rise', delay: .3 } }),
+          pt('find', 'invite', 144, 334, { w: 124, h: 25, size: 12.2, anim: { in: 'pop', delay: .45 } })] },
+        surprise: { w: 448, h: 570, bg: { src: 'fairy-card-surprise.webp', fit: 'stretch' }, els: [
+          tx(D('fairySurprise'), 168, 190, 220, 37, F.script, ink, { h: 60, anim: { in: 'pop' } }),
+          tx(D('fairySurpriseSub'), 168, 254, 220, 19.4, F.hand, ink, { anim: { in: 'rise', delay: .15 } }),
+          tx(D('fairySurpriseWait'), 186, 300, 185, 12.4, F.serif, text, { lh: 1.37, anim: { in: 'rise', delay: .3 } }),
+          pt('next', 'surprise', 242, 390, { w: 72, h: 25.5, anim: { in: 'pop', delay: .45 } })] },
+        reservation: { w: 520, h: 900, bg: { color: '#fff9f4', radius: 24, shadow: true }, els: [
+          im('fairy-res-l1.webp', -6, -6, 190, 260), im('fairy-res-r1.webp', 336, -6, 190, 260),
+          im('fairy-res-l3.webp', -6, 640, 190, 266), im('fairy-res-r3.webp', 336, 640, 190, 266),
+          tx(D('fairyReserved'), 120, 120, 280, 27, F.hand, ink, { anim: { in: 'rise' } }),
+          tx('{seats}', 120, 156, 280, 80, F.num, ink, { h: 100, anim: { in: 'pop', delay: .3 } }),
+          tx(D('fairySeatsWord'), 120, 256, 280, 26.5, F.hand, ink, { anim: { in: 'rise', delay: .4 } }),
+          tx(D('fairyForYou'), 120, 292, 280, 17, F.serif, ink, { anim: { in: 'rise', delay: .45 } }),
+          tx(D('fairyCount'), 110, 326, 300, 12.7, F.serif, ink, { lh: 1.4 }),
+          pt('guestlist', 'reservation', 120, 370, { w: 280, h: 170 }),
+          tx(D('fairyCheck'), 110, 560, 300, 19.3, F.serif, ink),
+          pt('recap', 'reservation', 115, 600, { w: 290, h: 120 }),
+          pt('submit', 'reservation', 186, 742, { w: 150, h: 28 })] },
+        change: { w: 406, h: 460, bg: { color: 'transparent' }, els: [
+          im('fairy-env-back.webp', 0, 0, 406, 460),
+          im('fairy-paper.webp', 25, -24, 356, 404, { anim: { in: 'rise', dur: 1.4, delay: .3 } }),
+          tx(D('fairyChangeTitle'), 80, 14, 246, 26, F.script, ink, { h: 74, lh: 1.42, anim: { in: 'fade', delay: .8 } }),
+          tx(D('fairyChangeHello').replace('{name}', '{first}'), 25, 92, 356, 19, F.serif, ink, { anim: { in: 'fade', delay: .9 } }),
+          pt('choices', 'change', 102, 138, { w: 230, h: 56, anim: { in: 'fade', delay: 1 } }),
+          pt('save', 'change', 126, 216, { w: 157, h: 32, size: 16.6, anim: { in: 'pop', delay: 1.1 } }),
+          im('fairy-env-front.webp', 0, 0, 406, 460)] },
+        thanks: { w: 520, h: 300, bg: { color: 'transparent' }, els: [
+          im('fairy-t-thanks.webp', 75, 40, 370, 140, { anim: { in: 'wipe', dur: 2.6 } }),
+          im('fairy-butterfly.webp', 40, 20, 40, 34, { op: .5, anim: { loop: 'float' } }), im('fairy-butterfly.webp', 440, 140, 32, 27, { op: .5, flipX: true, anim: { loop: 'float', delay: 1 } }),
+          pt('link', 'thanks', 160, 200, { label: D('fairyBackLink'), w: 200, h: 26, anim: { in: 'fade', delay: 2.4 } })] },
+      } };
+    } },
+    { id: 'blank', name: 'Simple cream', note: 'A plain card to start from scratch.', make() {
+      const card = (h, els) => ({ w: 420, h, bg: { color: '#fffaf1', radius: 22, shadow: true }, els });
+      const s = 'Cormorant Garamond', g = '#3f4a2e';
+      return { transition: 'fade', backdrop: { color: '#efe8d8' }, pages: {
+        notice: card(560, [tx('Kindly RSVP', 40, 120, 340, 40, 'Great Vibes', g, { anim: { in: 'fade' } }), tx('{couple}', 40, 200, 340, 20, s, g, { upper: true, ls: 120 }), tx('Please let us know if you can celebrate with us by {deadline}.', 60, 260, 300, 16, s, g, { lh: 1.4 }), pt('next', 'notice', 155, 400, { fill: g })]),
+        invite: card(560, [tx('Hello!', 40, 140, 340, 44, 'Great Vibes', g), tx('What’s your name?', 40, 220, 340, 20, s, g), pt('namebox', 'invite', 95, 280, { fill: '#f1ebdc' }), pt('find', 'invite', 145, 330, { fill: g })]),
+        surprise: card(560, [tx('Surprise!', 40, 150, 340, 44, 'Great Vibes', g), tx('{rep} is answering for your group. You can see the answer once it’s sent.', 60, 240, 300, 16, s, g, { lh: 1.4 }), pt('next', 'surprise', 155, 360, { fill: g })]),
+        reservation: card(820, [tx('We saved', 40, 70, 340, 22, s, g, { upper: true, ls: 150 }), tx('{seats}', 40, 100, 340, 80, 'Great Vibes', g, { h: 100 }), tx('seats for {family}', 40, 200, 340, 18, s, g), pt('guestlist', 'reservation', 70, 250, { font: s, color: g, on: g }), pt('recap', 'reservation', 65, 450, { w: 290 }), pt('submit', 'reservation', 135, 650, { fill: g })]),
+        change: card(480, [tx('A little change of plans?', 40, 70, 340, 34, 'Great Vibes', g), tx('Hello, {first}!', 40, 150, 340, 18, s, g), pt('choices', 'change', 90, 200, { color: g }), pt('save', 'change', 130, 300, { fill: g })]),
+        thanks: card(360, [tx('Thank you!', 40, 110, 340, 54, 'Great Vibes', g, { anim: { in: 'wipe', dur: 1.8 } }), pt('link', 'thanks', 110, 230, { color: g })]),
+      } };
+    } },
+  ];
+  K.blankPage = key => K.templates[1].make().pages[key];
+
+  window.PIXIE.cards = K;
+})();
+
+// Card Maker: the studio makes its own RSVP cards, Canva-style (jrick 2026-11-04).
+// Pages (one per guest screen) → elements: text, pictures, shapes and the working parts (name box, buttons, guest list...).
+// Opened full-screen from the board; the board saves what comes back. Studio only: couples and guests never get here.
+(function () {
+  'use strict';
+  const P = window.PIXIE, C = window.PixieCore, esc = P.esc;
+  const K = () => P.cards;
+  const U = () => window.PixieUI;
+  const SWATCHES = ['#ffffff', '#fffaf1', '#f4efe2', '#e6e1cf', '#fef9f5', '#f6d9e4', '#e8b4c0', '#c79293', '#c27390', '#a2454f', '#4a5232', '#3f4a2e', '#7f8f5a', '#b9c49a',
+    '#d8c08a', '#b08d57', '#8b6f4e', '#5b5547', '#2d2a26', '#000000', '#cfe0f0', '#9fb7d6', '#b7a3d0', 'transparent'];
+  const ANIM_IN = [['none', 'None'], ['fade', 'Fade'], ['rise', 'Rise'], ['drop', 'Drop'], ['pop', 'Pop'], ['zoom', 'Zoom out'], ['left', 'Slide from left'], ['right', 'Slide from right'], ['spin', 'Spin in'], ['blur', 'Soft focus'], ['wipe', 'Write on']];
+  const ANIM_LOOP = [['none', 'None'], ['float', 'Float'], ['sway', 'Sway'], ['pulse', 'Pulse'], ['twinkle', 'Twinkle'], ['spin', 'Turn around']];
+  const TRANSITIONS = [['fade', 'Fade'], ['slide', 'Slide'], ['zoom', 'Zoom'], ['rise', 'Rise'], ['flip', 'Flip'], ['none', 'None']];
+  const EFFECTS = [['none', 'None'], ['shadow', 'Shadow'], ['lift', 'Lift'], ['glow', 'Glow'], ['outline', 'Outline']];
+  const SHAPES = [['rect', 'Square'], ['rrect', 'Rounded'], ['circle', 'Circle'], ['line', 'Line'], ['heart', 'Heart'], ['star', 'Star'], ['arch', 'Arch'], ['blob', 'Blob'], ['frame', 'Frame']];
+  const BUILTIN = [['fairy-butterfly.webp', 'Butterfly'], ['fairy-tulip.webp', 'Tulip'], ['fairy-res-l1.webp', 'Flowers left'], ['fairy-res-r1.webp', 'Flowers right'], ['fairy-res-l3.webp', 'Flowers low left'],
+    ['fairy-res-r3.webp', 'Flowers low right'], ['fairy-t-kindly.webp', '“Kindly RSVP!” lettering'], ['fairy-t-change.webp', '“Change of Plans” lettering'], ['fairy-t-thanks.webp', '“Thank You!” lettering'],
+    ['fairy-card-rsvp.webp', 'Lily card'], ['fairy-card-name.webp', 'Curtain card'], ['fairy-card-surprise.webp', 'Surprise card'], ['fairy-paper.webp', 'Pink paper'], ['fairy-env-back.webp', 'Envelope back'], ['fairy-env-front.webp', 'Envelope front']];
+  const PAGE_SIZES = [['Card (portrait)', 420, 560], ['Tall card', 420, 640], ['Square', 500, 500], ['Phone story', 360, 640], ['Wide card', 640, 460], ['Long page', 520, 900]];
+  const TEXT_PRESETS = [
+    ['Add a heading', { text: 'Add a heading', size: 40, font: 'Great Vibes', w: 320 }],
+    ['Add a subheading', { text: 'Add a subheading', size: 22, font: 'Cormorant Garamond', w: 300, bold: true }],
+    ['Add a little bit of body text', { text: 'Add a little bit of body text', size: 14, font: 'Gilda Display', w: 260 }],
+  ];
+  const COMBOS = [
+    ['Kindly RSVP!', { size: 36, font: 'Homemade Apple', w: 300 }], ['Save the Date', { size: 44, font: 'Great Vibes', w: 320 }],
+    ['YOU’RE INVITED', { size: 20, font: 'Cinzel', w: 300, ls: 200 }], ['with love', { size: 30, font: 'Parisienne', w: 220 }],
+    ['Hello, {first}!', { size: 22, font: 'Fuzzy Bubbles', w: 260 }], ['{seats} seats for you', { size: 24, font: 'Cormorant Garamond', w: 300, italic: true }],
+  ];
+  const PLACEHOLDERS = [['{couple}', 'Client name'], ['{date}', 'Event date'], ['{deadline}', 'RSVP deadline'], ['{family}', 'Group name'], ['{seats}', 'Number of seats'],
+    ['{rep}', 'Representative'], ['{name}', 'Guest’s full name'], ['{first}', 'Guest’s first name'], ['{coming}', 'How many are coming'], ['{total}', 'How many in the group']];
+
+  let S = null; // the open editor
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const pg = () => S.cards.pages[S.page];
+  const byId = id => pg().els.find(e => e.id === id);
+  const sel = () => S.sel.map(byId).filter(Boolean);
+  const one = () => S.sel.length === 1 ? byId(S.sel[0]) : null;
+  const required = (e) => e && e.type === 'part' && (C.CARD_REQUIRED[S.page] || []).includes(e.kind);
+  const r1 = v => Math.round(v * 10) / 10;
+
+  // ---------- history ----------
+  function remember(key) {
+    const now = Date.now();
+    if (key && S.lastKey === key && now - S.lastAt < 800) { S.lastAt = now; return; }
+    S.lastKey = key; S.lastAt = now;
+    S.undo.push(JSON.stringify(S.cards)); if (S.undo.length > 80) S.undo.shift();
+    S.redo = []; S.dirty = true;
+  }
+  function undo(back) {
+    const from = back ? S.undo : S.redo, to = back ? S.redo : S.undo;
+    if (!from.length) return;
+    to.push(JSON.stringify(S.cards)); S.cards = JSON.parse(from.pop()); S.lastKey = null; S.dirty = true;
+    S.sel = S.sel.filter(id => byId(id)); S.crop = null;
+    draw();
+  }
+
+  // ---------- open / close ----------
+  P.cardMaker = {
+    open(opts) {
+      if (S) return;
+      const cards = opts.cards && opts.cards.pages ? clone(opts.cards) : null;
+      S = { opts, cards: cards || K().templates[0].make(), page: K().PAGES.some(x => x[0] === opts.page) ? opts.page : 'notice', sel: [], zoom: null, panel: cards ? 'elements' : 'templates', undo: [], redo: [], dirty: !cards,
+        use: opts.theme.rsvpDesign === 'custom' || !cards, fontQuery: '', clip: null, crop: null, preview: null };
+      for (const [k] of K().PAGES) if (!S.cards.pages[k]) S.cards.pages[k] = K().blankPage(k);
+      const root = document.createElement('div');
+      root.className = 'cm'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'Card Maker');
+      document.body.appendChild(root); document.body.classList.add('cm-open');
+      S.root = root;
+      root.addEventListener('pointerdown', onPointerDown);
+      root.addEventListener('click', onClick);
+      root.addEventListener('input', onInput);
+      root.addEventListener('change', onInput);
+      root.addEventListener('dblclick', onDblClick);
+      root.addEventListener('wheel', onWheel, { passive: false });
+      window.addEventListener('keydown', onKey);
+      window.addEventListener('resize', fitZoom);
+      window.addEventListener('beforeunload', onLeave);
+      P.loadFonts(K().fonts(S.cards));
+      layout(); fitZoom();
+      if (!cards) U().toast('Started from your Fairy Garden pictures. Pick another template on the left, or change anything you like.');
+    },
+    isOpen: () => !!S,
+  };
+  // Ctrl + mouse wheel (or a pinch on a touchpad) zooms the card.
+  function onWheel(ev) {
+    if (!S || !(ev.ctrlKey || ev.metaKey) || !$('wrap').contains(ev.target)) return;
+    ev.preventDefault();
+    S.zoomSet = true; S.zoom = Math.max(0.15, Math.min(4, (S.zoom || 1) * Math.exp(-ev.deltaY * 0.0025)));
+    paintCanvas(); paintTop();
+  }
+  function onLeave(e) { if (S && S.dirty) { e.preventDefault(); e.returnValue = ''; } }
+  async function close(force) {
+    if (!force && S.dirty && !(await U().confirm({ title: 'Leave without saving?', message: 'Your card changes aren’t saved yet. If you leave now, they will be lost.', yes: 'Leave without saving', no: 'Stay here' }))) return;
+    window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fitZoom); window.removeEventListener('beforeunload', onLeave);
+    S.root.remove(); document.body.classList.remove('cm-open');
+    const done = S.opts.onClose; S = null;
+    if (done) done();
+  }
+  async function save() {
+    if (S.busy) return;
+    if (S.editing) stopTextEdit();
+    S.busy = true; paintTop();
+    const ok = await S.opts.onSave(clone(S.cards), S.use).catch(err => { U().toast(err.message, 'error'); return false; });
+    if (!S) return;
+    S.busy = false;
+    if (ok) { S.dirty = false; U().toast(S.use ? 'Your cards are saved! Guests see them now.' : 'Your cards are saved.'); }
+    paintTop();
+  }
+
+  // ---------- layout ----------
+  function layout() {
+    S.root.innerHTML = `
+      <header class="cm-top" data-region="top"></header>
+      <div class="cm-body">
+        <nav class="cm-rail" aria-label="Tools">${[['templates', 'Templates', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'], ['elements', 'Elements', 'M12 3l3 6 6 .9-4.5 4.3 1 6.3L12 17.6 6.5 20.5l1-6.3L3 9.9 9 9z'],
+          ['text', 'Text', 'M5 5h14v3h-2V7h-4v11h2v2H9v-2h2V7H7v1H5z'], ['uploads', 'Uploads', 'M12 4l5 5h-3v6h-4V9H7zM5 18h14v2H5z'], ['background', 'Background', 'M4 5h16v14H4zM6 15l4-4 3 3 2-2 3 3'],
+          ['parts', 'Working parts', 'M4 6h16v4H4zM4 14h10v4H4z'], ['layers', 'Layers', 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5']].map(([k, l, d]) =>
+          `<button type="button" data-cm="panel" data-k="${k}" aria-pressed="${S.panel === k}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg><span>${l}</span></button>`).join('')}</nav>
+        <aside class="cm-panel" data-region="panel"></aside>
+        <section class="cm-main">
+          <div class="cm-toolbar" data-region="toolbar"></div>
+          <div class="cm-canvas-wrap" data-region="wrap"><div class="cm-canvas" data-region="canvas"></div></div>
+          <footer class="cm-pages" data-region="pages"></footer>
+        </section>
+      </div>
+      <div class="cm-pop" data-region="pop" hidden></div>`;
+    draw();
+  }
+  const $ = r => S.root.querySelector(`[data-region="${r}"]`);
+  function draw() { paintTop(); paintPanel(); paintCanvas(); paintToolbar(); paintPages(); }
+  function changed(key, opts) {
+    // After any edit: redraw the canvas, the toolbar values and the page thumbnail.
+    S.dirty = true;
+    paintCanvas(); paintTop();
+    if (!opts || opts.toolbar !== false) paintToolbar();
+    if (S.panel === 'layers' || S.panel === 'parts') paintPanel();
+    clearTimeout(S.thumbT); S.thumbT = setTimeout(() => { if (S) paintPages(); }, 250);
+  }
+  function paintTop() {
+    const t = $('top'); if (!t) return;
+    t.innerHTML = `<button type="button" class="cm-tbtn" data-cm="close">‹ Board</button>
+      <span class="cm-name">Card Maker <small>${esc(S.opts.client.couple)}</small></span>
+      <span class="cm-sp"></span>
+      <span class="cm-seg"><button type="button" data-cm="undo" ${S.undo.length ? '' : 'disabled'} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button type="button" data-cm="redo" ${S.redo.length ? '' : 'disabled'} title="Redo (Ctrl+Y)" aria-label="Redo">↷</button></span>
+      <span class="cm-seg cm-zoom"><button type="button" data-cm="zoom" data-d="-1" aria-label="Zoom out">−</button><span>${Math.round((S.zoom || 1) * 100)}%</span><button type="button" data-cm="zoom" data-d="1" aria-label="Zoom in">+</button><button type="button" data-cm="zoom" data-d="0">Fit</button></span>
+      <span class="cm-sp"></span>
+      <label class="cm-use" title="When on, guests see these cards instead of the Classic or Fairy Garden design."><input type="checkbox" data-cm="use" ${S.use ? 'checked' : ''}><span>Guests see these cards</span></label>
+      <button type="button" class="cm-tbtn is-icon" data-cm="help" data-pop="1" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">⌨</button>
+      <button type="button" class="cm-tbtn" data-cm="preview">▶ Preview</button>
+      <button type="button" class="cm-save ${S.busy ? '' : S.dirty ? 'is-dirty' : 'is-saved'}" data-cm="save" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Saving…' : S.dirty ? 'Save' : 'Saved ✓'}</button>`;
+  }
+
+  // ---------- canvas ----------
+  function fitZoom() {
+    if (!S) return;
+    const w = $('wrap'); if (!w) return;
+    const p = pg(), aw = w.clientWidth - 100, ah = w.clientHeight - 140;
+    S.fit = Math.max(0.15, Math.min(2, aw / p.w, ah / p.h));
+    if (!S.zoomSet) S.zoom = S.fit;
+    paintCanvas(); paintTop();
+  }
+  function ctx(mode) {
+    const r = K().sample();
+    return { mode: mode || 'edit', site: S.opts.site, theme: Object.assign({}, S.opts.theme, { cards: S.cards }), r, answers: { g1: 'attending', g2: 'attending', g3: 'not_attending' }, who: 'g1', view: false };
+  }
+  function paintCanvas() {
+    const cv = $('canvas'); if (!cv) return;
+    const p = pg(), z = S.zoom || 1;
+    const editing = S.editing && byId(S.editing);
+    cv.style.width = p.w * z + 'px'; cv.style.height = p.h * z + 'px'; cv.style.background = K().backdrop(S.cards).color || '';
+    const c = Object.assign(ctx('edit'), { width: p.w * z + 'px' });
+    cv.innerHTML = K().page(S.cards, S.page, c) + '<div class="cm-over" data-region="over"></div>';
+    if (editing) startTextEdit(editing.id, true);
+    K().paint(cv);
+    paintOver();
+  }
+  // Selection boxes, handles, snap guides, crop frame.
+  function paintOver(guides) {
+    const o = $('over'); if (!o) return;
+    const z = S.zoom || 1;
+    if (S.crop) return paintCrop(o, z);
+    const items = sel();
+    const box = (e, cls) => `<div class="cm-box ${cls}" data-box="${esc(e.id)}" style="left:${e.x * z}px;top:${e.y * z}px;width:${e.w * z}px;height:${boxH(e) * z}px;rotate:${e.rot || 0}deg">`;
+    let html = '';
+    if (items.length === 1 && !S.editing) {
+      const e = items[0];
+      html += box(e, 'is-one' + (e.lock ? ' is-locked' : '')) + (e.lock ? '' : handlesFor(e).map(h => `<span class="cm-h cm-h-${h}" data-h="${h}"></span>`).join('') + '<span class="cm-h cm-h-rot" data-h="rot" title="Turn">⟳</span>') + '</div>';
+    } else if (items.length > 1) {
+      html += items.map(e => box(e, 'is-multi') + '</div>').join('');
+    }
+    if (S.marquee) { const m = S.marquee; html += `<div class="cm-marquee" style="left:${Math.min(m.x0, m.x1) * z}px;top:${Math.min(m.y0, m.y1) * z}px;width:${Math.abs(m.x1 - m.x0) * z}px;height:${Math.abs(m.y1 - m.y0) * z}px"></div>`; }
+    if (S.badge && items.length) {
+      const l = Math.min(...items.map(e => e.x)), r = Math.max(...items.map(e => e.x + e.w)), b = Math.max(...items.map(e => e.y + boxH(e)));
+      html += `<div class="cm-badge" style="left:${(l + r) / 2 * z}px;top:${b * z + (S.badge.rot ? 52 : 12)}px">${esc(S.badge.text)}</div>`;
+    }
+    if (guides) html += guides.map(g => g.v !== undefined ? `<div class="cm-guide cm-gv" style="left:${g.v * z}px"></div>` : `<div class="cm-guide cm-gh" style="top:${g.h * z}px"></div>`).join('');
+    o.innerHTML = html;
+  }
+  function handlesFor(e) {
+    if (e.type === 'text') return ['nw', 'ne', 'sw', 'se', 'w', 'e'];
+    if (e.type === 'image') return ['nw', 'ne', 'sw', 'se'];
+    return ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e'];
+  }
+  // Text boxes grow with their words: their height is measured on the canvas.
+  function boxH(e) {
+    if (e.type !== 'text') return e.h;
+    const n = S.root.querySelector(`.cm-canvas .c-el[data-el="${CSS.escape(e.id)}"]`);
+    if (n) { const h = n.offsetHeight / (S.zoom || 1); if (h > 0) { e.h = r1(h); return h; } }
+    return e.h;
+  }
+  // Pointer position in page pixels.
+  function pagePt(ev) {
+    const r = $('canvas').getBoundingClientRect(), z = S.zoom || 1;
+    return { x: (ev.clientX - r.left) / z, y: (ev.clientY - r.top) / z };
+  }
+
+  function onPointerDown(ev) {
+    if (!S || ev.button > 0) return;
+    if (!ev.target.closest('[data-region="pop"]') && !ev.target.closest('[data-pop]')) hidePop();
+    if (S.preview) return;
+    const cv = $('canvas'), wrap = $('wrap');
+    if (!wrap.contains(ev.target)) return;
+    if (S.editing) { if (ev.target.closest(`.c-el[data-el="${CSS.escape(S.editing)}"]`)) return; stopTextEdit(); }
+    if (S.crop) return cropDown(ev);
+    const h = ev.target.closest('[data-h]');
+    if (h) { ev.preventDefault(); return handleDrag(ev, h.dataset.h); }
+    const n = ev.target.closest('.c-el');
+    let id = n ? n.dataset.el : null;
+    // Clicking inside the selected element's box keeps it (even where it has see-through parts).
+    if (S.sel.length === 1 && cv.contains(ev.target)) {
+      const e = one(), p = pagePt(ev);
+      if (e && p.x >= e.x && p.x <= e.x + e.w && p.y >= e.y && p.y <= e.y + boxH(e) && !(n && n.dataset.el !== e.id && byId(n.dataset.el) && pg().els.indexOf(byId(n.dataset.el)) > pg().els.indexOf(e))) id = e.id;
+    }
+    if (!id) {
+      if (!ev.shiftKey) S.sel = [];
+      const p = pagePt(ev);
+      S.marquee = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      const move = m => { const q = pagePt(m); S.marquee.x1 = q.x; S.marquee.y1 = q.y; paintOver(); };
+      const up = () => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+        if (!S) return;
+        const m = S.marquee; S.marquee = null;
+        const l = Math.min(m.x0, m.x1), r = Math.max(m.x0, m.x1), t = Math.min(m.y0, m.y1), b = Math.max(m.y0, m.y1);
+        if (r - l > 4 || b - t > 4) S.sel = pg().els.filter(e => e.x < r && e.x + e.w > l && e.y < b && e.y + boxH(e) > t && !e.lock).map(e => e.id);
+        paintOver(); paintToolbar(); if (S.panel === 'layers') paintPanel();
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+      paintOver(); paintToolbar(); if (S.panel === 'layers') paintPanel();
+      return;
+    }
+    ev.preventDefault();
+    if (ev.shiftKey) { S.sel = S.sel.includes(id) ? S.sel.filter(x => x !== id) : S.sel.concat(id); paintOver(); paintToolbar(); return; }
+    if (!S.sel.includes(id)) { S.sel = [id]; paintOver(); paintToolbar(); if (S.panel === 'layers') paintPanel(); }
+    moveDrag(ev);
+  }
+  // Drag to move, with snapping to the page middle and edges and to other elements (hold Alt to move freely).
+  function moveDrag(ev) {
+    const items = sel().filter(e => !e.lock); if (!items.length) return;
+    const p0 = pagePt(ev), start = items.map(e => ({ e, x: e.x, y: e.y, h: boxH(e) })), z = S.zoom || 1;
+    const others = pg().els.filter(e => !S.sel.includes(e.id));
+    const p = pg(), xs = [0, p.w / 2, p.w], ys = [0, p.h / 2, p.h];
+    for (const o of others) { const h = boxH(o); xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + h / 2, o.y + h); }
+    let moved = false;
+    const move = m => {
+      const q = pagePt(m); let dx = q.x - p0.x, dy = q.y - p0.y;
+      if (!moved && Math.hypot(dx * z, dy * z) < 3) return;
+      if (!moved) { remember(); moved = true; }
+      const l = Math.min(...start.map(s => s.x)) + dx, t = Math.min(...start.map(s => s.y)) + dy;
+      const r = Math.max(...start.map(s => s.x + s.e.w)) + dx, b = Math.max(...start.map(s => s.y + s.h)) + dy;
+      const guides = [], snap = 6 / z;
+      if (!m.altKey) {
+        let bx = null, by = null;
+        for (const gx of xs) for (const v of [l, (l + r) / 2, r]) { const d = gx - v; if (Math.abs(d) < snap && (!bx || Math.abs(d) < Math.abs(bx.d))) bx = { d, g: gx }; }
+        for (const gy of ys) for (const v of [t, (t + b) / 2, b]) { const d = gy - v; if (Math.abs(d) < snap && (!by || Math.abs(d) < Math.abs(by.d))) by = { d, g: gy }; }
+        if (bx) { dx += bx.d; guides.push({ v: bx.g }); }
+        if (by) { dy += by.d; guides.push({ h: by.g }); }
+      }
+      S.badge = { text: `X ${Math.round(l + dx)}  ·  Y ${Math.round(t + dy)}` };
+      for (const s of start) {
+        s.e.x = r1(s.x + dx); s.e.y = r1(s.y + dy);
+        const n = S.root.querySelector(`.cm-canvas .c-el[data-el="${CSS.escape(s.e.id)}"]`);
+        if (n) { n.style.left = `calc(${s.e.x} * var(--u))`; n.style.top = `calc(${s.e.y} * var(--u))`; }
+      }
+      paintOver(guides);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      if (!S) return;
+      S.badge = null;
+      if (moved) changed(); else paintOver();
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  }
+  // Corner dots resize (pictures keep their shape; text grows its letters), side dots stretch, the round dot turns.
+  function handleDrag(ev, h) {
+    const e = one(); if (!e || e.lock) return;
+    remember();
+    const o = { x: e.x, y: e.y, w: e.w, h: boxH(e), size: e.size, rot: e.rot || 0 };
+    const cx = o.x + o.w / 2, cy = o.y + o.h / 2, rad = o.rot * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
+    const p0 = pagePt(ev);
+    const move = m => {
+      const q = pagePt(m);
+      if (h === 'rot') {
+        let a = Math.atan2(q.y - cy, q.x - cx) * 180 / Math.PI + 90;
+        while (a > 180) a -= 360; while (a < -180) a += 360;
+        if (!m.shiftKey) for (const s of [-180, -135, -90, -45, 0, 45, 90, 135, 180]) if (Math.abs(a - s) < 5) a = s;
+        e.rot = Math.round(a) || undefined;
+        S.badge = { text: `${e.rot || 0}°`, rot: true };
+      } else {
+        // pointer movement in the element's own (unturned) directions
+        const dxs = q.x - p0.x, dys = q.y - p0.y, dx = dxs * cos + dys * sin, dy = -dxs * sin + dys * cos;
+        let w = o.w, hh = o.h;
+        if (h.includes('e')) w = o.w + dx; if (h.includes('w')) w = o.w - dx;
+        if (h.includes('s')) hh = o.h + dy; if (h.includes('n')) hh = o.h - dy;
+        const corner = h.length === 2;
+        const keep = corner && (e.type === 'image' || e.type === 'text' || m.shiftKey);
+        if (keep) { const k = Math.max(w / o.w, hh / o.h); w = o.w * k; hh = o.h * k; }
+        w = Math.max(8, w); hh = Math.max(3, hh);
+        if (e.type === 'text') { if (corner) e.size = r1(Math.max(2, o.size * w / o.w)); hh = o.h * (corner ? w / o.w : 1); }
+        // keep the opposite corner or side where it was (in turned space)
+        const ax = h.includes('w') ? 1 : h.includes('e') ? -1 : 0, ay = h.includes('n') ? 1 : h.includes('s') ? -1 : 0;
+        const sx = -ax * (w - o.w) / 2, sy = -ay * (hh - o.h) / 2;
+        const ncx = cx + sx * cos - sy * sin, ncy = cy + sx * sin + sy * cos;
+        e.w = r1(w); e.h = r1(hh); e.x = r1(ncx - w / 2); e.y = r1(ncy - hh / 2);
+        S.badge = { text: e.type === 'text' && corner ? `${Math.round(e.w)} wide  ·  text ${r1(e.size)}` : `${Math.round(e.w)} × ${Math.round(hh)}` };
+      }
+      paintCanvas();
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); if (S) { S.badge = null; changed(); } };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  }
+
+  // ---------- text editing on the canvas ----------
+  function onDblClick(ev) {
+    if (!S || S.preview) return;
+    const n = ev.target.closest('.cm-canvas .c-el'); if (!n) return;
+    const e = byId(n.dataset.el);
+    if (e && e.type === 'text' && !e.lock) { S.sel = [e.id]; startTextEdit(e.id); }
+    if (e && e.type === 'image') { S.sel = [e.id]; startCrop(); }
+  }
+  function startTextEdit(id, again) {
+    const e = byId(id), n = S.root.querySelector(`.cm-canvas .c-el[data-el="${CSS.escape(id)}"] .c-text`); if (!e || !n) return;
+    if (!again) remember();
+    S.editing = id;
+    n.textContent = e.text;
+    n.contentEditable = 'plaintext-only';
+    if (n.contentEditable !== 'plaintext-only') n.contentEditable = 'true';
+    n.classList.add('cm-editing');
+    n.addEventListener('input', () => { e.text = n.innerText.replace(/\n$/, ''); });
+    n.addEventListener('keydown', k => { if (k.key === 'Escape') { k.preventDefault(); stopTextEdit(); } k.stopPropagation(); });
+    if (!again) {
+      n.focus();
+      const r = document.createRange(); r.selectNodeContents(n); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      paintOver(); paintToolbar();
+    }
+  }
+  function stopTextEdit() {
+    if (!S.editing) return;
+    const e = byId(S.editing); S.editing = null;
+    if (e && !e.text.trim()) { pg().els = pg().els.filter(x => x !== e); S.sel = []; }
+    changed();
+  }
+
+  // ---------- crop ----------
+  function startCrop() {
+    const e = one(); if (!e || e.type !== 'image' || e.lock) return;
+    hidePop();
+    const c = Object.assign({ l: 0, t: 0, r: 0, b: 0 }, e.crop), fw = 1 - c.l - c.r, fh = 1 - c.t - c.b, W = e.w / fw, H = e.h / fh;
+    remember();
+    S.crop = { id: e.id, full: { x: e.x - c.l * W, y: e.y - c.t * H, w: W, h: H }, box: { l: e.x, t: e.y, r: e.x + e.w, b: e.y + e.h }, rot: e.rot || 0 };
+    e.rot = undefined; paintCanvas(); paintToolbar();
+  }
+  function paintCrop(o, z) {
+    const c = S.crop, f = c.full, b = c.box;
+    const src = S.root.querySelector(`.cm-canvas .c-el[data-el="${CSS.escape(c.id)}"] img`);
+    o.innerHTML = `<div class="cm-crop-ghost" style="left:${f.x * z}px;top:${f.y * z}px;width:${f.w * z}px;height:${f.h * z}px">${src && src.src ? `<img alt="" src="${esc(src.src)}">` : ''}</div>
+      <div class="cm-crop" data-crop="move" style="left:${b.l * z}px;top:${b.t * z}px;width:${(b.r - b.l) * z}px;height:${(b.b - b.t) * z}px">
+        ${src && src.src ? `<span class="cm-crop-in"><img alt="" src="${esc(src.src)}" style="left:${(f.x - b.l) * z}px;top:${(f.y - b.t) * z}px;width:${f.w * z}px;height:${f.h * z}px"></span>` : ''}
+        ${['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e'].map(h => `<span class="cm-ch cm-h-${h}" data-crop="${h}"></span>`).join('')}</div>`;
+    const el = S.root.querySelector(`.cm-canvas .c-el[data-el="${CSS.escape(c.id)}"]`); if (el) el.style.visibility = 'hidden';
+  }
+  function cropDown(ev) {
+    const hnd = ev.target.closest('[data-crop]');
+    if (!hnd) { finishCrop(true); return; }
+    ev.preventDefault();
+    const c = S.crop, f = c.full, b0 = Object.assign({}, c.box), p0 = pagePt(ev), k = hnd.dataset.crop, min = 10;
+    const move = m => {
+      const q = pagePt(m), dx = q.x - p0.x, dy = q.y - p0.y, b = c.box;
+      if (k === 'move') {
+        const w = b0.r - b0.l, h = b0.b - b0.t;
+        b.l = Math.min(Math.max(f.x, b0.l + dx), f.x + f.w - w); b.t = Math.min(Math.max(f.y, b0.t + dy), f.y + f.h - h); b.r = b.l + w; b.b = b.t + h;
+      } else {
+        if (k.includes('w')) b.l = Math.min(Math.max(f.x, b0.l + dx), b.r - min);
+        if (k.includes('e')) b.r = Math.max(Math.min(f.x + f.w, b0.r + dx), b.l + min);
+        if (k.includes('n')) b.t = Math.min(Math.max(f.y, b0.t + dy), b.b - min);
+        if (k.includes('s')) b.b = Math.max(Math.min(f.y + f.h, b0.b + dy), b.t + min);
+      }
+      paintOver();
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  }
+  function finishCrop(apply) {
+    const c = S.crop; if (!c) return;
+    const e = byId(c.id); S.crop = null;
+    if (e && apply) {
+      const f = c.full, b = c.box;
+      const crop = { l: (b.l - f.x) / f.w, t: (b.t - f.y) / f.h, r: (f.x + f.w - b.r) / f.w, b: (f.y + f.h - b.b) / f.h };
+      for (const k in crop) crop[k] = Math.max(0, Math.round(crop[k] * 1000) / 1000);
+      if (crop.l || crop.t || crop.r || crop.b) e.crop = crop; else delete e.crop;
+      e.x = r1(b.l); e.y = r1(b.t); e.w = r1(b.r - b.l); e.h = r1(b.b - b.t);
+    }
+    if (e) e.rot = c.rot || undefined;
+    if (!apply) S.undo.pop();
+    changed();
+  }
+
+  // ---------- remove background (for pictures on a plain or soft background, done right here in the browser) ----------
+  async function loadImg(e) {
+    const src = /^fairy-/.test(e.src) ? P.fairy(e.src) : await P.mediaUrl(e.src);
+    return new Promise((res, rej) => { const i = new Image(); if (/^https?:/.test(src) && !src.startsWith(location.origin)) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => rej(new Error('That picture could not be opened.')); i.src = src; });
+  }
+  function cutBackground(img, tol, everywhere, maxSide) {
+    const sc = Math.min(1, (maxSide || 1600) / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, w, h);
+    const im = g.getImageData(0, 0, w, h), d = im.data;
+    // The background color: the most common color around the edge.
+    const counts = new Map(), edge = [], key = i => (d[i * 4] >> 4) << 8 | (d[i * 4 + 1] >> 4) << 4 | (d[i * 4 + 2] >> 4);
+    const pushEdge = i => { if (d[i * 4 + 3] < 10) return; edge.push(i); const k = key(i); counts.set(k, (counts.get(k) || 0) + 1); };
+    for (let x = 0; x < w; x++) { pushEdge(x); pushEdge((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { pushEdge(y * w); pushEdge(y * w + w - 1); }
+    let bestK = 0, bestN = -1; for (const [k, n] of counts) if (n > bestN) { bestN = n; bestK = k; }
+    let br = 0, bg = 0, bb = 0, bn = 0;
+    for (const i of edge) if (key(i) === bestK) { br += d[i * 4]; bg += d[i * 4 + 1]; bb += d[i * 4 + 2]; bn++; }
+    if (!bn) return null;
+    br /= bn; bg /= bn; bb /= bn;
+    const T = tol * 4.42; // tol is a percent of the biggest color difference
+    const dist = i => Math.hypot(d[i * 4] - br, d[i * 4 + 1] - bg, d[i * 4 + 2] - bb);
+    const mask = new Uint8Array(w * h); // 1 = background
+    if (everywhere) { for (let i = 0; i < w * h; i++) if (dist(i) <= T) mask[i] = 1; }
+    else {
+      const q = new Int32Array(w * h); let qh = 0, qt = 0;
+      for (const i of edge) if (!mask[i] && dist(i) <= T) { mask[i] = 1; q[qt++] = i; }
+      while (qh < qt) {
+        const i = q[qh++], x = i % w;
+        if (x > 0 && !mask[i - 1] && dist(i - 1) <= T) { mask[i - 1] = 1; q[qt++] = i - 1; }
+        if (x < w - 1 && !mask[i + 1] && dist(i + 1) <= T) { mask[i + 1] = 1; q[qt++] = i + 1; }
+        if (i >= w && !mask[i - w] && dist(i - w) <= T) { mask[i - w] = 1; q[qt++] = i - w; }
+        if (i < w * (h - 1) && !mask[i + w] && dist(i + w) <= T) { mask[i + w] = 1; q[qt++] = i + w; }
+      }
+    }
+    // Soft edge: pixels next to the removed part fade by how close their color is to the background.
+    for (let i = 0; i < w * h; i++) {
+      if (mask[i]) { d[i * 4 + 3] = 0; continue; }
+      const x = i % w;
+      const near = (x > 0 && mask[i - 1]) || (x < w - 1 && mask[i + 1]) || (i >= w && mask[i - w]) || (i < w * (h - 1) && mask[i + w]);
+      if (near) { const a = Math.min(1, Math.max(0.15, (dist(i) - T) / (T * 0.9 + 12))); d[i * 4 + 3] = Math.round(d[i * 4 + 3] * a); }
+    }
+    g.putImageData(im, 0, 0);
+    return cv;
+  }
+  function bgPreview() {
+    const pop = $('pop'); if (!pop || !S.bgImg) return;
+    const box = pop.querySelector('.cm-bg-prev'); if (!box) return;
+    let cv = null;
+    try { cv = cutBackground(S.bgImg, S.bgTol, S.bgAll, 420); } catch (err) { box.textContent = 'This picture can’t be changed here (it comes from another website).'; return; }
+    box.innerHTML = ''; if (cv) box.appendChild(cv); else box.textContent = 'No plain background found around the edges.';
+  }
+  async function openRemoveBg(anchor) {
+    const e = one(); if (!e || e.type !== 'image') return;
+    S.bgTol = S.bgTol || 14; S.bgAll = !!S.bgAll; S.bgImg = null;
+    showPop(anchor, `<h4>Remove background</h4>
+      <p class="cm-hint">Best for pictures on a plain or soft background, like your watercolor elements. The checkered parts become see-through.</p>
+      <div class="cm-bg-prev">Loading…</div>
+      ${slider('bgtol', 'Strength', 2, 45, 1, S.bgTol, v => v + '%')}
+      <label class="cm-check"><input type="checkbox" data-cm="bgall" ${S.bgAll ? 'checked' : ''}> Also remove that color inside the picture</label>
+      <div class="cm-row"><button type="button" class="cm-btn" data-cm="bg-apply">Remove background</button>${e.orig ? '<button type="button" class="cm-btn cm-ghost" data-cm="bg-restore">Restore original</button>' : ''}</div>`, 'wide');
+    S.popFor = 'pop-rmbg';
+    try { S.bgImg = await loadImg(e); bgPreview(); } catch (err) { const b = $('pop').querySelector('.cm-bg-prev'); if (b) b.textContent = err.message; }
+  }
+  async function applyRemoveBg() {
+    const e = one(); if (!e || !S.bgImg) return;
+    const btn = $('pop').querySelector('[data-cm="bg-apply"]'); if (btn) { btn.disabled = true; btn.textContent = 'Removing…'; }
+    try {
+      const cv = cutBackground(S.bgImg, S.bgTol, S.bgAll, 1600); if (!cv) throw new Error('No plain background found around the edges of this picture.');
+      const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+      const ref = await P.uploadMedia(blob);
+      remember(); e.orig = e.orig || e.src; e.src = ref;
+      if (S.opts.onLibAdd) S.opts.onLibAdd([{ src: ref, name: 'No background', w: cv.width, h: cv.height }]).then(lib => { if (lib && S) S.lib = lib; }).catch(() => {});
+      hidePop(); changed(); U().toast('Background removed.');
+    } catch (err) { U().toast(err.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Remove background'; } }
+  }
+
+  // ---------- adding things ----------
+  function addEl(el, opts) {
+    remember();
+    const p = pg();
+    if (el.x === undefined) { el.x = r1((p.w - el.w) / 2); el.y = r1(Math.max(0, (p.h - (el.h || 40)) / 2 + (p.els.length % 6) * 8 - 24)); }
+    el.id = el.id || K().newId();
+    p.els.push(el); S.sel = [el.id];
+    if (el.font) P.loadFonts([el.font]);
+    changed();
+    if (opts && opts.edit) setTimeout(() => S && startTextEdit(el.id), 30);
+  }
+  function addText(preset, raw) {
+    const p = pg(), o = Object.assign({ type: 'text', color: '#4a5232', align: 'center' }, preset);
+    o.w = Math.min(o.w || 300, p.w - 20); o.h = o.size * 1.4;
+    if (raw) o.text = raw;
+    addEl(o, { edit: !raw && /^Add /.test(o.text) });
+  }
+  function addShape(kind) {
+    const base = { type: 'shape', shape: kind === 'rrect' ? 'rect' : kind, fill: '#e8b4c0', w: 140, h: 140 };
+    if (kind === 'rrect') base.radius = 24;
+    if (kind === 'line') Object.assign(base, { fill: '#4a5232', w: 220, h: 3 });
+    if (kind === 'frame') Object.assign(base, { fill: 'transparent', stroke: '#4a5232', sw: 3, w: 220, h: 280 });
+    if (kind === 'arch') Object.assign(base, { w: 180, h: 240, fill: '#f6d9e4' });
+    addEl(base);
+  }
+  async function addImage(src, w0, h0) {
+    let w = w0, h = h0;
+    if (!w || !h) { try { const i = await loadImg({ src }); w = i.naturalWidth; h = i.naturalHeight; } catch (e) { w = 200; h = 200; } }
+    const p = pg(), k = Math.min(1, (p.w * 0.6) / w, (p.h * 0.6) / h);
+    addEl({ type: 'image', src, w: r1(w * k), h: r1(h * k) });
+  }
+  function addPart(kind) {
+    const p = pg(), on = p.els.find(e => e.type === 'part' && e.kind === kind);
+    if (on) { S.sel = [on.id]; paintOver(); paintToolbar(); return paintPanel(); }
+    const d = K().partDefaults(kind, S.page);
+    addEl(Object.assign(d, { x: r1((p.w - d.w) / 2), y: r1(Math.min(p.h - d.h - 10, p.h * 0.7)) }));
+  }
+
+  // ---------- left panels ----------
+  function paintPanel() {
+    const el = $('panel'); if (!el) return;
+    S.root.querySelectorAll('[data-cm="panel"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === S.panel));
+    el.innerHTML = ({ templates: panelTemplates, elements: panelElements, text: panelText, uploads: panelUploads, background: panelBackground, parts: panelParts, layers: panelLayers, fonts: panelFonts }[S.panel] || panelElements)();
+    K().paint(el);
+    if (S.panel === 'fonts') { P.loadFonts(fontList()); const q = el.querySelector('[data-cm="fontq"]'); if (q && S.fontFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+  }
+  function panelTemplates() {
+    return `<h3>Templates</h3><p class="cm-hint">Start from a ready-made set of all six pages, then change anything.</p>
+      <div class="cm-tpls">${K().templates.map(t => {
+        const c = t.make(), p = c.pages.notice, z = 200 / p.w;
+        return `<button type="button" class="cm-tpl" data-cm="tpl" data-id="${t.id}"><span class="cm-tpl-pic" style="background:${esc(K().backdrop(c).color)}${c.backdrop && c.backdrop.src ? `;background-image:url('${esc(P.fairy(c.backdrop.src))}');background-size:cover` : ''}">${K().page(c, 'notice', Object.assign(ctx('thumb'), { width: Math.round(p.w * z * 0.8) + 'px' }))}</span><b>${esc(t.name)}</b><small>${esc(t.note)}</small></button>`;
+      }).join('')}</div>
+      <p class="cm-hint">Using a template replaces all six pages. You can press Undo.</p>`;
+  }
+  function panelElements() {
+    const lib = libList();
+    return `<h3>Shapes</h3><div class="cm-grid cm-shapes">${SHAPES.map(([k, l]) => `<button type="button" data-cm="shape" data-k="${k}" title="${l}" aria-label="${l}">${shapeIcon(k)}</button>`).join('')}</div>
+      <h3>Fairy Garden pictures</h3><div class="cm-grid">${BUILTIN.map(([s, l]) => `<button type="button" data-cm="img" data-src="${s}" title="${esc(l)}"><img alt="${esc(l)}" src="${esc(P.fairy(s))}"></button>`).join('')}</div>
+      <h3>My elements</h3>${lib.length ? `<div class="cm-grid">${lib.map(x => `<button type="button" data-cm="img" data-src="${esc(x.src)}" data-w="${x.w || ''}" data-h="${x.h || ''}" title="${esc(x.name)}"><img alt="${esc(x.name)}" data-csrc="${esc(x.src)}"></button>`).join('')}</div>` : '<p class="cm-hint">Your uploads show here. Use Uploads to add flowers, frames or photos.</p>'}`;
+  }
+  function shapeIcon(k) {
+    const st = 'fill="#e8b4c0" stroke="#c27390" stroke-width="2"';
+    return `<svg viewBox="0 0 40 40" aria-hidden="true">${{ rect: `<rect x="6" y="6" width="28" height="28" ${st}/>`, rrect: `<rect x="6" y="6" width="28" height="28" rx="8" ${st}/>`, circle: `<circle cx="20" cy="20" r="14" ${st}/>`,
+      line: '<rect x="4" y="19" width="32" height="2" fill="#4a5232"/>', heart: `<path transform="translate(4 4) scale(.32)" d="M50 92 C20 70 2 52 2 30 C2 14 14 4 28 4 C38 4 46 10 50 18 C54 10 62 4 72 4 C86 4 98 14 98 30 C98 52 80 70 50 92Z" ${st}/>`,
+      star: `<path transform="translate(4 4) scale(.32)" d="M50 3 L61.8 36.6 L97.6 37.6 L69.1 59.4 L79.4 93.4 L50 73.2 L20.6 93.4 L30.9 59.4 L2.4 37.6 L38.2 36.6Z" ${st}/>`, arch: `<path d="M8 36V19A12 12 0 0 1 32 19V36Z" ${st}/>`,
+      blob: `<path transform="translate(4 4) scale(.32)" d="M50 3 C75 2 97 19 96 46 C95 73 78 97 50 97 C23 97 4 77 4 50 C4 23 25 4 50 3Z" ${st}/>`, frame: '<rect x="7" y="5" width="26" height="30" fill="none" stroke="#4a5232" stroke-width="2"/>' }[k]}</svg>`;
+  }
+  function panelText() {
+    return `<h3>Text</h3><div class="cm-stack">${TEXT_PRESETS.map(([l, o], i) => `<button type="button" class="cm-textbtn cm-tb-${i}" data-cm="text" data-i="${i}" style="font-family:'${esc(o.font)}'">${esc(l)}</button>`).join('')}</div>
+      <h3>Font combinations</h3><div class="cm-stack">${COMBOS.map(([t, o], i) => `<button type="button" class="cm-combo" data-cm="combo" data-i="${i}" style="font-family:'${esc(o.font)}';${o.italic ? 'font-style:italic;' : ''}${o.ls ? `letter-spacing:${o.ls / 1000}em;` : ''}">${esc(t)}</button>`).join('')}</div>
+      <h3>Words that fill in by themselves</h3><p class="cm-hint">Type these in any text and each guest sees their own details. Click one to add it to the selected text.</p>
+      <div class="cm-chips">${PLACEHOLDERS.map(([k, l]) => `<button type="button" class="cm-chip" data-cm="ph" data-k="${k}" title="${esc(l)}">${k}<small>${esc(l)}</small></button>`).join('')}</div>`;
+  }
+  function panelUploads() {
+    const lib = libList();
+    return `<h3>Uploads</h3><label class="cm-btn cm-upload ${S.uploading ? 'is-busy' : ''}"><input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" data-cm="upload" ${S.uploading ? 'disabled' : ''}>${S.uploading ? 'Uploading…' : 'Upload pictures'}</label>
+      <p class="cm-hint">PNG, JPG, WebP or GIF. They’re kept in My elements for every client. To remove a background, select the picture on the card and click Remove background.</p>
+      ${lib.length ? `<div class="cm-grid cm-grid-2">${lib.map(x => `<div class="cm-up"><button type="button" data-cm="img" data-src="${esc(x.src)}" data-w="${x.w || ''}" data-h="${x.h || ''}" title="Add ${esc(x.name)}"><img alt="${esc(x.name)}" data-csrc="${esc(x.src)}"></button>
+        <button type="button" class="cm-x" data-cm="lib-del" data-id="${esc(x.id)}" aria-label="Remove ${esc(x.name)} from My elements">×</button></div>`).join('')}</div>` : ''}`;
+  }
+  function panelBackground() {
+    const p = pg(), bg = p.bg || {}, bd = S.cards.backdrop || {}, lib = libList();
+    const pics = (cmd, cur) => `<div class="cm-grid">${[['', 'None']].concat(BUILTIN.slice(9), [['fairy-bg.jpg', 'Garden']]).map(([s, l]) => `<button type="button" class="${(cur || '') === s ? 'is-on' : ''}" data-cm="${cmd}" data-src="${s}" title="${esc(l)}">${s ? `<img alt="${esc(l)}" src="${esc(P.fairy(s))}">` : '<span class="cm-none">None</span>'}</button>`).join('')}
+      ${lib.map(x => `<button type="button" class="${cur === x.src ? 'is-on' : ''}" data-cm="${cmd}" data-src="${esc(x.src)}" title="${esc(x.name)}"><img alt="${esc(x.name)}" data-csrc="${esc(x.src)}"></button>`).join('')}</div>`;
+    return `<h3>This page</h3>
+      <div class="cm-field"><span>Color</span>${swatches('page-color', bg.color || 'transparent')}</div>
+      <div class="cm-field"><span>Picture</span>${pics('page-pic', bg.src)}</div>
+      ${bg.src ? `<label class="cm-field"><span>Picture fit</span><select data-cm="page-fit">${[['cover', 'Fill the page'], ['contain', 'Show all of it'], ['stretch', 'Stretch to the page']].map(([k, l]) => `<option value="${k}" ${(bg.fit || 'cover') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
+      ${slider('page-radius', 'Rounded corners', 0, 120, 1, bg.radius || 0, v => v)}
+      <label class="cm-check"><input type="checkbox" data-cm="page-shadow" ${bg.shadow ? 'checked' : ''}> Soft shadow under the page</label>
+      <div class="cm-field"><span>Page size</span><div class="cm-row"><input type="number" min="200" max="1400" value="${p.w}" data-cm="page-w" aria-label="Width"> × <input type="number" min="200" max="2400" value="${p.h}" data-cm="page-h" aria-label="Height"></div>
+        <div class="cm-chips">${PAGE_SIZES.map(([l, w, h]) => `<button type="button" class="cm-chip" data-cm="page-size" data-w="${w}" data-h="${h}">${esc(l)}<small>${w}×${h}</small></button>`).join('')}</div></div>
+      <h3>Behind the card (whole screen)</h3>
+      <div class="cm-field"><span>Color</span>${swatches('bd-color', bd.color || '#f4efe2', true)}</div>
+      <div class="cm-field"><span>Picture</span>${pics('bd-pic', bd.src)}</div>
+      ${slider('bd-blur', 'Blur', 0, 30, 1, bd.blur || 0, v => v)}`;
+  }
+  function panelParts() {
+    const p = pg(), kinds = C.CARD_PARTS[S.page] || [], req = C.CARD_REQUIRED[S.page] || [];
+    return `<h3>Working parts</h3><p class="cm-hint">${esc(K().PAGE_HELP[S.page])} These are the pieces guests click or type in. Place and style them like any element.</p>
+      <div class="cm-stack">${kinds.map(k => {
+        const on = p.els.find(e => e.type === 'part' && e.kind === k);
+        return `<button type="button" class="cm-part ${on ? 'is-on' : ''}" data-cm="part" data-k="${k}"><b>${esc(K().PART_LABELS[k])}</b><small>${on ? 'On the page · click to select' : 'Click to add'}${req.includes(k) ? ' · needed' : ''}</small></button>`;
+      }).join('') || '<p class="cm-hint">This page has no working parts.</p>'}</div>`;
+  }
+  function elName(e) {
+    if (e.type === 'text') return e.text.slice(0, 28);
+    if (e.type === 'part') return K().PART_LABELS[e.kind];
+    if (e.type === 'shape') return (SHAPES.find(s => s[0] === e.shape) || [, 'Shape'])[1];
+    const b = BUILTIN.find(x => x[0] === e.src); if (b) return b[1];
+    const l = libList().find(x => x.src === e.src); return l ? l.name : 'Picture';
+  }
+  function panelLayers() {
+    const els = pg().els.slice().reverse();
+    return `<h3>Layers</h3><p class="cm-hint">The top of the list is in front. Use ▲ ▼ to move a layer.</p><ol class="cm-layers">${els.map(e => `<li class="${S.sel.includes(e.id) ? 'is-on' : ''}">
+      <button type="button" class="cm-layer" data-cm="layer" data-id="${esc(e.id)}"><span class="cm-ltype">${{ text: 'T', image: '▣', shape: '◆', part: '⚙' }[e.type]}</span><span>${esc(elName(e))}</span></button>
+      <button type="button" data-cm="lmove" data-id="${esc(e.id)}" data-d="1" aria-label="Move up">▲</button><button type="button" data-cm="lmove" data-id="${esc(e.id)}" data-d="-1" aria-label="Move down">▼</button>
+      <button type="button" data-cm="llock" data-id="${esc(e.id)}" aria-pressed="${!!e.lock}" title="${e.lock ? 'Unlock' : 'Lock'}">${e.lock ? '🔒' : '🔓'}</button></li>`).join('')}</ol>`;
+  }
+  const fontList = () => [...new Set(C.CARD_EXTRA_FONTS.concat(P.allFonts()))];
+  function panelFonts() {
+    const e = one(), cur = e && (e.font || (e.type === 'part' ? 'Gilda Display' : '')), q = S.fontQuery.toLowerCase();
+    const groups = [['Fairy Garden fonts', C.CARD_EXTRA_FONTS]].concat(Object.entries(P.fontGroups()));
+    const custom = S.opts.theme.customFont ? [[C.CUSTOM_FONT, S.opts.customFontLabel || 'My uploaded font']] : [];
+    if (custom.length) P.loadCustomFont(S.opts.theme.customFont);
+    return `<h3>Font</h3><input type="search" class="cm-search" placeholder="Search fonts" value="${esc(S.fontQuery)}" data-cm="fontq">
+      ${custom.map(([v, l]) => `<button type="button" class="cm-font ${cur === v ? 'is-on' : ''}" data-cm="font" data-f="${esc(v)}" style="font-family:'${esc(P.fontFamily(v))}'">${esc(l)}</button>`).join('')}
+      ${groups.map(([g, list]) => { const f = list.filter(n => n.toLowerCase().includes(q)); return f.length ? `<h4>${esc(g)}</h4>${f.map(n => `<button type="button" class="cm-font ${cur === n ? 'is-on' : ''}" data-cm="font" data-f="${esc(n)}" style="font-family:'${esc(n)}'">${esc(n)}</button>`).join('')}` : ''; }).join('')}`;
+  }
+  const libList = () => S.lib || S.opts.lib || [];
+
+  // ---------- top toolbar (changes with what is selected) ----------
+  function swatches(cmd, cur, noClear) {
+    return `<div class="cm-sw">${[...new Set(docColors().concat(SWATCHES))].filter(c => !(noClear && c === 'transparent')).slice(0, 34).map(c => `<button type="button" class="${c === cur ? 'is-on' : ''} ${c === 'transparent' ? 'is-clear' : ''}" data-cm="${cmd}" data-c="${c}" style="background:${c === 'transparent' ? '#fff' : c}" title="${c === 'transparent' ? 'No color' : c}" aria-label="${c === 'transparent' ? 'No color' : c}"></button>`).join('')}
+      <label class="cm-sw-more" title="Any color"><input type="color" data-cm="${cmd}" value="${/^#/.test(cur || '') ? cur : '#c79293'}"><span>+</span></label></div>`;
+  }
+  function docColors() {
+    const out = new Set();
+    for (const p of Object.values(S.cards.pages)) { if (p.bg && /^#/.test(p.bg.color || '')) out.add(p.bg.color); for (const e of p.els) for (const k of ['color', 'fill', 'stroke', 'on']) if (/^#/.test(e[k] || '')) out.add(e[k]); }
+    return [...out].slice(0, 10);
+  }
+  function slider(cmd, label, min, max, step, v, fmt) {
+    return `<label class="cm-slider"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-cm="${cmd}"><output>${fmt ? fmt(v) : v}</output></label>`;
+  }
+  const tb = (cmd, label, extra, on) => `<button type="button" class="cm-t ${on ? 'is-on' : ''}" data-cm="${cmd}" ${extra || ''}>${label}</button>`;
+  function paintToolbar() {
+    const t = $('toolbar'); if (!t) return;
+    if (S.crop) { t.innerHTML = `<span class="cm-tlabel">Drag the corners or the picture to crop</span>${tb('crop-reset', 'Reset')}${tb('crop-cancel', 'Cancel')}<button type="button" class="cm-save" data-cm="crop-done">Done</button>`; return; }
+    const items = sel(), e = one();
+    if (!items.length) {
+      const p = pg(), bg = p.bg || {};
+      t.innerHTML = `<span class="cm-tlabel">${esc(K().PAGES.find(x => x[0] === S.page)[1])} page</span>
+        ${tb('pop-pagecolor', `<i class="cm-dot" style="background:${bg.color && bg.color !== 'transparent' ? bg.color : '#fff'}"></i>Page color`, 'data-pop="1"')}
+        ${tb('panel', 'Page picture & size', 'data-k="background"')}
+        ${tb('pop-transition', `Page transition: ${esc((TRANSITIONS.find(x => x[0] === (S.cards.transition || 'fade')) || [])[1])}`, 'data-pop="1"')}
+        ${tb('play', '▶ Play animations')}
+        <span class="cm-tlabel cm-muted">Click anything on the card to change it. Double-click text to type.</span>`;
+      return;
+    }
+    if (items.length > 1) {
+      t.innerHTML = `<span class="cm-tlabel">${items.length} selected</span>${tb('pop-align', 'Position', 'data-pop="1"')}${tb('pop-anim', '✦ Animate', 'data-pop="1"')}${tb('dup', 'Duplicate')}${tb('del', 'Delete')}`;
+      return;
+    }
+    const common = `${tb('pop-anim', `✦ Animate${e.anim && (e.anim.in || e.anim.loop) ? ' •' : ''}`, 'data-pop="1"')}${tb('pop-op', 'Transparency', 'data-pop="1"')}${tb('pop-align', 'Position', 'data-pop="1"')}
+      ${tb('lock', e.lock ? '🔒' : '🔓', `title="${e.lock ? 'Unlock' : 'Lock'}" aria-label="${e.lock ? 'Unlock' : 'Lock'}"`, e.lock)}${e.type === 'part' ? '' : tb('dup', '⧉', 'title="Duplicate (Ctrl+D)" aria-label="Duplicate"')}${required(e) ? '' : tb('del', '🗑', 'title="Delete" aria-label="Delete"')}`;
+    if (e.type === 'text') {
+      t.innerHTML = `${tb('panel', `<span style="font-family:'${esc(P.fontFamily(e.font))}'">${esc(e.font)}</span> ▾`, 'data-k="fonts" title="Font"')}
+        <span class="cm-size"><button type="button" data-cm="size" data-d="-1" aria-label="Smaller">−</button><input type="number" min="2" max="600" step="0.5" value="${e.size}" data-cm="size-in" aria-label="Text size"><button type="button" data-cm="size" data-d="1" aria-label="Bigger">+</button></span>
+        ${tb('pop-color', `<i class="cm-tcolor" style="border-bottom-color:${e.color}">A</i>`, 'data-pop="1" title="Text color"')}
+        ${tb('bold', '<b>B</b>', 'title="Bold"', e.bold)}${tb('italic', '<i>I</i>', 'title="Italic"', e.italic)}${tb('underline', '<u>U</u>', 'title="Underline"', e.underline)}${tb('upper', 'aA', 'title="Capitals"', e.upper)}
+        ${tb('align', { left: '⇤', center: '↔', right: '⇥', justify: '☰' }[e.align || 'center'], 'title="Align"')}
+        ${tb('pop-spacing', 'Spacing', 'data-pop="1"')}${tb('pop-effects', 'Effects', 'data-pop="1"')}${common}`;
+    } else if (e.type === 'image') {
+      t.innerHTML = `${tb('crop', '✂ Crop')}${tb('pop-rmbg', '✨ Remove background', 'data-pop="1"')}${tb('pop-adjust', 'Adjust', 'data-pop="1"')}${tb('pop-flip', 'Flip', 'data-pop="1"')}${tb('pop-corners', 'Corners & border', 'data-pop="1"')}${tb('as-bg', 'Use as page background')}${common}`;
+    } else if (e.type === 'shape') {
+      t.innerHTML = `${tb('pop-fill', `<i class="cm-dot" style="background:${e.fill === 'transparent' ? '#fff' : e.fill}"></i>Color`, 'data-pop="1"')}${tb('pop-stroke', 'Border', 'data-pop="1"')}${['rect', 'frame', 'line'].includes(e.shape) ? tb('pop-corners', 'Corners', 'data-pop="1"') : ''}${tb('pop-flip', 'Flip', 'data-pop="1"')}${common}`;
+    } else if (e.type === 'part') {
+      const labels = { next: [['label', 'Words']], find: [['label', 'Words']], save: [['label', 'Words']], link: [['label', 'Words']], submit: [['label', 'Words'], ['label2', 'After sending']], namebox: [['ph', 'Hint in the box']], choices: [['yes', 'Yes'], ['no', 'No']] }[e.kind] || [];
+      t.innerHTML = `<span class="cm-tlabel">${esc(K().PART_LABELS[e.kind])}</span>
+        ${labels.map(([k, l]) => `<label class="cm-tinput"><span>${l}</span><input type="text" maxlength="120" value="${esc(e[k] != null ? e[k] : '')}" data-cm="pprop" data-k="${k}"></label>`).join('')}
+        ${tb('panel', `<span style="font-family:'${esc(P.fontFamily(e.font || 'Gilda Display'))}'">${esc(e.font || 'Gilda Display')}</span> ▾`, 'data-k="fonts" title="Font"')}
+        <span class="cm-size"><button type="button" data-cm="size" data-d="-1" aria-label="Smaller">−</button><input type="number" min="2" max="300" step="0.5" value="${e.size || 13}" data-cm="size-in" aria-label="Text size"><button type="button" data-cm="size" data-d="1" aria-label="Bigger">+</button></span>
+        ${tb('pop-color', `<i class="cm-tcolor" style="border-bottom-color:${e.color || '#4a5232'}">A</i>`, 'data-pop="1" title="Words color"')}
+        ${['guestlist', 'recap'].includes(e.kind) ? '' : tb('pop-fill', `<i class="cm-dot" style="background:${!e.fill || e.fill === 'transparent' ? '#fff' : e.fill}"></i>${e.kind === 'choices' ? 'Switch off' : 'Fill'}`, 'data-pop="1"')}
+        ${['guestlist', 'choices'].includes(e.kind) ? tb('pop-on', `<i class="cm-dot" style="background:${e.on || '#c79293'}"></i>Switch on`, 'data-pop="1"') : ''}
+        ${['guestlist', 'recap'].includes(e.kind) ? tb('pop-line', `<i class="cm-dot" style="background:${e.line || '#d9d2bd'}"></i>Lines`, 'data-pop="1"') : ''}
+        ${['next', 'find', 'save', 'submit', 'namebox', 'link'].includes(e.kind) ? tb('pop-corners', 'Corners', 'data-pop="1"') : ''}
+        ${tb('bold', '<b>B</b>', 'title="Bold"', e.bold)}${tb('italic', '<i>I</i>', 'title="Italic"', e.italic)}${tb('upper', 'aA', 'title="Capitals"', e.upper)}${common}`;
+    }
+  }
+
+  // ---------- popovers ----------
+  function showPop(anchor, html, wide) {
+    const p = $('pop'); p.innerHTML = html; p.hidden = false; p.classList.toggle('is-wide', wide === 'wide');
+    const r = anchor.getBoundingClientRect(), pw = p.offsetWidth;
+    p.style.left = Math.max(8, Math.min(innerWidth - pw - 8, r.left)) + 'px'; p.style.top = r.bottom + 6 + 'px';
+    S.popFor = anchor.dataset.cm;
+  }
+  function hidePop() { const p = S && $('pop'); if (p && !p.hidden) { p.hidden = true; p.innerHTML = ''; } if (S) S.popFor = null; }
+  function openPop(cmd, anchor, refresh) {
+    if (S.popFor === cmd && !refresh) return hidePop();
+    const e = one();
+    const anim = (e && e.anim) || {};
+    const body = {
+      'pop-pagecolor': () => `<h4>Page color</h4>${swatches('page-color', pg().bg && pg().bg.color)}`,
+      'pop-transition': () => `<h4>Page transition</h4><p class="cm-hint">How one page changes to the next for guests.</p><div class="cm-chips">${TRANSITIONS.map(([k, l]) => `<button type="button" class="cm-chip ${(S.cards.transition || 'fade') === k ? 'is-on' : ''}" data-cm="transition" data-k="${k}">${l}</button>`).join('')}</div>`,
+      'pop-color': () => `<h4>Color</h4>${swatches('el-color', e.color, true)}`,
+      'pop-fill': () => `<h4>${e.type === 'part' && e.kind === 'choices' ? 'Switch color when off' : 'Color'}</h4>${swatches('el-fill', e.fill)}`,
+      'pop-on': () => `<h4>Switch color when on</h4>${swatches('el-on', e.on, true)}`,
+      'pop-line': () => `<h4>Line color</h4>${swatches('el-line', e.line, true)}`,
+      'pop-stroke': () => `<h4>Border</h4>${slider('el-sw', 'Thickness', 0, 40, 0.5, e.sw || 0, v => v)}${swatches('el-stroke', e.stroke || '#4a5232', true)}`,
+      'pop-spacing': () => `<h4>Spacing</h4>${slider('el-ls', 'Letter spacing', -20, 200, 1, e.ls || 0, v => v)}${slider('el-lh', 'Line spacing', 0.6, 3, 0.05, e.lh || 1.25, v => (+v).toFixed(2))}`,
+      'pop-effects': () => `<h4>Effects</h4><div class="cm-chips">${EFFECTS.map(([k, l]) => `<button type="button" class="cm-chip ${(e.effect || 'none') === k ? 'is-on' : ''}" data-cm="effect" data-k="${k}">${l}</button>`).join('')}</div>${e.effect && e.effect !== 'lift' ? `<h4>Effect color</h4>${swatches('el-ecolor', e.ecolor, true)}` : ''}`,
+      'pop-op': () => `<h4>Transparency</h4>${slider('el-op', 'See-through', 5, 100, 1, Math.round((e.op === undefined ? 1 : e.op) * 100), v => v + '%')}`,
+      'pop-anim': () => `<h4>Animate when the page opens</h4><div class="cm-chips">${ANIM_IN.map(([k, l]) => `<button type="button" class="cm-chip ${(anim.in || 'none') === k ? 'is-on' : ''}" data-cm="anim-in" data-k="${k}">${l}</button>`).join('')}</div>
+        <h4>Keep moving</h4><div class="cm-chips">${ANIM_LOOP.map(([k, l]) => `<button type="button" class="cm-chip ${(anim.loop || 'none') === k ? 'is-on' : ''}" data-cm="anim-loop" data-k="${k}">${l}</button>`).join('')}</div>
+        ${slider('anim-delay', 'Starts after', 0, 5, 0.1, anim.delay || 0, v => (+v).toFixed(1) + ' s')}${slider('anim-dur', 'Length', 0.2, 4, 0.1, anim.dur || 0.8, v => (+v).toFixed(1) + ' s')}
+        <div class="cm-row"><button type="button" class="cm-btn cm-ghost" data-cm="play">▶ Play this page</button></div>`,
+      'pop-align': () => `<h4>Arrange</h4><div class="cm-chips">${[['front', 'To front'], ['forward', 'Forward'], ['backward', 'Backward'], ['back', 'To back']].map(([k, l]) => `<button type="button" class="cm-chip" data-cm="order" data-k="${k}">${l}</button>`).join('')}</div>
+        <h4>Line up with the page</h4><div class="cm-chips">${[['left', 'Left'], ['hcenter', 'Center'], ['right', 'Right'], ['top', 'Top'], ['vcenter', 'Middle'], ['bottom', 'Bottom']].map(([k, l]) => `<button type="button" class="cm-chip" data-cm="align-to" data-k="${k}">${l}</button>`).join('')}</div>
+        ${e ? `<h4>Size and place</h4><div class="cm-xywh">${[['x', 'X'], ['y', 'Y'], ['w', 'W'], ['h', 'H'], ['rot', 'Turn']].filter(([k]) => !(k === 'h' && e.type === 'text')).map(([k, l]) => `<label><span>${l}</span><input type="number" step="1" value="${Math.round(k === 'rot' ? e.rot || 0 : e[k])}" data-cm="xywh" data-k="${k}"></label>`).join('')}</div>` : ''}`,
+      'pop-flip': () => `<h4>Flip</h4><div class="cm-chips"><button type="button" class="cm-chip ${e.flipX ? 'is-on' : ''}" data-cm="flip" data-k="flipX">Left ↔ right</button><button type="button" class="cm-chip ${e.flipY ? 'is-on' : ''}" data-cm="flip" data-k="flipY">Upside down</button></div>`,
+      'pop-corners': () => e.type === 'image' ? `<h4>Corners</h4>${slider('el-radius-pct', 'Rounded corners', 0, 50, 1, e.radius || 0, v => (+v === 50 ? 'Circle' : v + '%'))}
+          <h4>Border</h4>${slider('el-bw', 'Thickness', 0, 30, 0.5, e.bw || 0, v => v)}${swatches('el-bc', e.bc || '#ffffff', true)}<label class="cm-check"><input type="checkbox" data-cm="el-shadow" ${e.shadow ? 'checked' : ''}> Soft shadow</label>`
+        : `<h4>Corners</h4>${slider('el-radius', 'Rounded corners', 0, e.type === 'part' ? 60 : 200, 1, e.radius || 0, v => v)}`,
+      'pop-adjust': () => { const a = e.adj || {}; return `<h4>Adjust</h4>${slider('adj-b', 'Brightness', 0, 200, 1, a.b !== undefined ? a.b : 100, v => v + '%')}${slider('adj-c', 'Contrast', 0, 200, 1, a.c !== undefined ? a.c : 100, v => v + '%')}${slider('adj-s', 'Color strength', 0, 200, 1, a.s !== undefined ? a.s : 100, v => v + '%')}${slider('adj-g', 'Black & white', 0, 100, 1, a.g || 0, v => v + '%')}${slider('adj-bl', 'Blur', 0, 20, 0.5, a.bl || 0, v => v)}<div class="cm-row"><button type="button" class="cm-btn cm-ghost" data-cm="adj-reset">Reset</button></div>`; },
+    };
+    if (cmd === 'pop-rmbg') return openRemoveBg(anchor);
+    if (cmd === 'help') return showPop(anchor, `<h4>Shortcuts</h4><div class="cm-keys">${[['Undo / Redo', 'Ctrl Z · Ctrl Y'], ['Save', 'Ctrl S'], ['Copy / Paste', 'Ctrl C · Ctrl V'], ['Duplicate', 'Ctrl D'], ['Select all', 'Ctrl A'],
+      ['Nudge', '← ↑ → ↓ (Shift = 10)'], ['Type in text', 'Double-click · Enter'], ['Crop a picture', 'Double-click'], ['Select several', 'Shift + click · drag a box'], ['Move without snapping', 'hold Alt'], ['Keep the shape', 'hold Shift on a corner'], ['Zoom', 'Ctrl + wheel'], ['Fold the side panel', 'click the open tool again'], ['Deselect', 'Esc'], ['Delete', 'Delete']].map(([a, k]) => `<span>${a}</span><kbd>${k}</kbd>`).join('')}</div>`, 'wide');
+    if (body[cmd]) showPop(anchor, body[cmd]());
+  }
+  // Refresh an open popover after a change made in it.
+  function refreshPop() {
+    if (!S.popFor) return;
+    const a = S.root.querySelector(`.cm-toolbar [data-cm="${S.popFor}"]`);
+    if (a) openPop(S.popFor, a, true); else hidePop();
+  }
+
+  // ---------- bottom page strip ----------
+  function paintPages() {
+    const el = $('pages'); if (!el || !S) return;
+    el.innerHTML = `<div class="cm-pagelist">${K().PAGES.map(([k, l], i) => {
+      const p = S.cards.pages[k], z = Math.min(84 / p.h, 120 / p.w);
+      return `<button type="button" class="cm-pagebtn ${S.page === k ? 'is-on' : ''}" data-cm="page" data-k="${k}" title="${esc(K().PAGE_HELP[k])}">
+        <span class="cm-thumb" style="width:${Math.round(p.w * z)}px;height:${Math.round(p.h * z)}px">${K().page(S.cards, k, Object.assign(ctx('thumb'), { width: Math.round(p.w * z) + 'px' }))}</span><span>${i + 1}. ${esc(l)}</span></button>`;
+    }).join('')}</div>`;
+    K().paint(el);
+  }
+
+  // ---------- preview (plays the pages the way guests see them) ----------
+  function openPreview() {
+    hidePop(); if (S.editing) stopTextEdit();
+    S.preview = { i: K().PAGES.findIndex(p => p[0] === S.page) };
+    const bd = K().backdrop(S.cards);
+    const box = document.createElement('div'); box.className = 'cm-preview'; S.previewEl = box;
+    box.innerHTML = `<div class="cm-pv-bg" style="background-color:${esc(bd.color)};${bd.blur ? `filter:blur(${bd.blur}px);` : ''}${bd.src && /^fairy-/.test(bd.src) ? `background-image:url('${esc(P.fairy(bd.src))}');` : ''}" ${bd.src && !/^fairy-/.test(bd.src) ? `data-cbg="${esc(bd.src)}"` : ''}></div>
+      <div class="cm-pv-stage" data-pv="stage"></div>
+      <div class="cm-pv-bar"><button type="button" data-cm="pv" data-d="-1">‹ Back</button><span class="cm-pv-dots" data-pv="dots"></span><span data-pv="name"></span><button type="button" data-cm="pv" data-d="1">Next ›</button><button type="button" data-cm="pv-close">Close preview</button></div>`;
+    S.root.appendChild(box); K().paint(box);
+    showPreviewPage('first');
+  }
+  function showPreviewPage(dir) {
+    const st = S.previewEl.querySelector('[data-pv="stage"]'), [k, l] = K().PAGES[S.preview.i];
+    const put = () => {
+      if (!S || !S.preview) return;
+      st.innerHTML = K().page(S.cards, k, Object.assign(ctx('guest'), { mode: 'guest' }));
+      st.querySelectorAll('button, input, a').forEach(b => { b.tabIndex = -1; b.removeAttribute('data-act'); if (b.tagName === 'A') b.removeAttribute('href'); });
+      K().paint(st);
+      const s = st.querySelector('.c-stage'); if (s) s.classList.add('g-enter-' + (dir === 'back' ? 'back' : 'fwd'));
+      S.previewEl.querySelector('[data-pv="name"]').textContent = `${S.preview.i + 1} of 6 · ${l}`;
+      S.previewEl.querySelector('[data-pv="dots"]').innerHTML = K().PAGES.map((x, i) => `<i class="${i === S.preview.i ? 'is-on' : ''}"></i>`).join('');
+    };
+    const old = st.querySelector('.c-stage');
+    if (old && dir !== 'first') { old.classList.add('g-leave-' + (dir === 'back' ? 'back' : 'fwd')); setTimeout(put, 260); } else put();
+  }
+  function closePreview() { if (S.previewEl) S.previewEl.remove(); S.preview = null; S.previewEl = null; }
+
+  // ---------- commands ----------
+  function setSel(fn, key, opts) { const items = sel(); if (!items.length) return; remember(key); items.forEach(fn); changed(key, opts); }
+  async function onClick(ev) {
+    if (!S) return;
+    const b = ev.target.closest('[data-cm]'); if (!b) return;
+    if ((b.tagName === 'INPUT' && b.type !== 'checkbox') || b.tagName === 'SELECT' || (b.tagName === 'INPUT' && b.type === 'checkbox')) return;
+    const cmd = b.dataset.cm, e = one();
+    if (cmd.startsWith('pop-') || cmd === 'help') return openPop(cmd, b);
+    if (b.dataset.c !== undefined) return colorCmd(cmd, b.dataset.c);
+    switch (cmd) {
+      case 'close': return close();
+      case 'save': return save();
+      case 'undo': return undo(true);
+      case 'redo': return undo(false);
+      case 'zoom': {
+        const d = +b.dataset.d; S.zoomSet = d !== 0;
+        S.zoom = d === 0 ? S.fit : Math.max(0.15, Math.min(4, (S.zoom || 1) * (d > 0 ? 1.2 : 1 / 1.2)));
+        paintCanvas(); return paintTop();
+      }
+      case 'preview': return openPreview();
+      case 'pv': { const n = S.preview.i + +b.dataset.d; if (n < 0 || n > 5) return; S.preview.i = n; return showPreviewPage(+b.dataset.d < 0 ? 'back' : 'fwd'); }
+      case 'pv-close': return closePreview();
+      case 'panel':
+        // Clicking the open tool on the left rail folds its panel away (more room for the card); clicking again opens it.
+        if (b.closest('.cm-rail') && S.panel === b.dataset.k) { S.root.classList.toggle('is-collapsed'); setTimeout(fitZoom, 360); return; }
+        if (S.root.classList.contains('is-collapsed')) { S.root.classList.remove('is-collapsed'); setTimeout(fitZoom, 360); }
+        S.panel = b.dataset.k; S.fontFocus = false; if (S.panel !== 'fonts') S.fontQuery = ''; return paintPanel();
+      case 'page': if (S.editing) stopTextEdit(); S.page = b.dataset.k; S.sel = []; S.crop = null; S.zoomSet = false; hidePop(); fitZoom(); paintPages(); paintPanel(); return paintToolbar();
+      case 'tpl': {
+        const t = K().templates.find(x => x.id === b.dataset.id); if (!t) return;
+        if (!(await U().confirm({ title: `Use the ${t.name} template?`, message: 'All six pages are replaced with this template. You can press Undo to get your pages back.', yes: 'Use template', no: 'Cancel' }))) return;
+        remember(); S.cards = t.make(); S.sel = []; P.loadFonts(K().fonts(S.cards)); S.zoomSet = false; fitZoom(); return draw();
+      }
+      case 'shape': return addShape(b.dataset.k);
+      case 'img': return addImage(b.dataset.src, +b.dataset.w || 0, +b.dataset.h || 0);
+      case 'text': return addText(Object.assign({}, TEXT_PRESETS[+b.dataset.i][1]));
+      case 'combo': { const [t, o] = COMBOS[+b.dataset.i]; return addText(Object.assign({ text: t }, o), t); }
+      case 'ph': {
+        if (e && e.type === 'text') { remember(); e.text = (e.text + ' ' + b.dataset.k).trim(); return changed(); }
+        return addText({ text: b.dataset.k, size: 20, font: 'Gilda Display', w: 260 }, b.dataset.k);
+      }
+      case 'part': return addPart(b.dataset.k);
+      case 'font': { const f = b.dataset.f; P.loadFonts([f]); setSel(x => { if (x.type === 'text' || x.type === 'part') x.font = f; }); return paintPanel(); }
+      case 'layer': S.sel = [b.dataset.id]; paintOver(); paintToolbar(); return paintPanel();
+      case 'lmove': { const els = pg().els, i = els.findIndex(x => x.id === b.dataset.id), j = i + +b.dataset.d; if (i < 0 || j < 0 || j >= els.length) return; remember(); [els[i], els[j]] = [els[j], els[i]]; return changed(); }
+      case 'llock': { const x = byId(b.dataset.id); if (!x) return; remember(); x.lock = !x.lock || undefined; return changed(); }
+      case 'lock': return setSel(x => { x.lock = !x.lock || undefined; });
+      case 'dup': return duplicate();
+      case 'del': return removeSel();
+      case 'bold': case 'italic': case 'underline': case 'upper': return setSel(x => { x[cmd] = !x[cmd] || undefined; });
+      case 'align': { const order = ['center', 'left', 'right', 'justify']; return setSel(x => { x.align = order[(order.indexOf(x.align || 'center') + 1) % 4]; }); }
+      case 'size': return setSel(x => { const s = x.size || 13; x.size = r1(Math.max(2, s + +b.dataset.d * (s >= 40 ? 2 : 1))); }, 'size');
+      case 'effect': setSel(x => { x.effect = b.dataset.k === 'none' ? undefined : b.dataset.k; }); return refreshPop();
+      case 'transition': remember(); S.cards.transition = b.dataset.k; changed(); return refreshPop();
+      case 'anim-in': case 'anim-loop': setSel(x => { x.anim = Object.assign({}, x.anim, { [cmd === 'anim-in' ? 'in' : 'loop']: b.dataset.k === 'none' ? undefined : b.dataset.k }); }); playPage(); return refreshPop();
+      case 'play': return playPage();
+      case 'order': return arrange(b.dataset.k);
+      case 'align-to': return alignTo(b.dataset.k);
+      case 'flip': setSel(x => { x[b.dataset.k] = !x[b.dataset.k] || undefined; }); return refreshPop();
+      case 'crop': return startCrop();
+      case 'crop-done': return finishCrop(true);
+      case 'crop-cancel': return finishCrop(false);
+      case 'crop-reset': { const c = S.crop; c.box = { l: c.full.x, t: c.full.y, r: c.full.x + c.full.w, b: c.full.y + c.full.h }; return paintOver(); }
+      case 'bg-apply': return applyRemoveBg();
+      case 'bg-restore': if (e && e.orig) { remember(); e.src = e.orig; delete e.orig; hidePop(); changed(); } return;
+      case 'as-bg': if (e && e.type === 'image') { remember(); pg().bg = Object.assign({}, pg().bg, { src: e.src, fit: 'cover' }); pg().els = pg().els.filter(x => x !== e); S.sel = []; changed(); } return;
+      case 'adj-reset': setSel(x => { delete x.adj; }); return refreshPop();
+      case 'page-size': return pageSize(+b.dataset.w, +b.dataset.h);
+      case 'page-pic': { remember(); const bg = Object.assign({}, pg().bg); if (b.dataset.src) { bg.src = b.dataset.src; bg.fit = bg.fit || 'cover'; } else { delete bg.src; delete bg.fit; } pg().bg = bg; changed(); return paintPanel(); }
+      case 'bd-pic': { remember(); const bd = Object.assign({}, S.cards.backdrop); if (b.dataset.src) bd.src = b.dataset.src; else delete bd.src; S.cards.backdrop = bd; changed(); return paintPanel(); }
+      case 'lib-del': {
+        const lib = libList(), x = lib.find(y => y.id === b.dataset.id); if (!x || !S.opts.onLibSet) return;
+        if (!(await U().confirm({ title: `Remove ${x.name} from My elements?`, message: 'Copies already placed on cards stay where they are.', yes: 'Remove', no: 'Keep' }))) return;
+        S.lib = await S.opts.onLibSet(lib.filter(y => y.id !== x.id)).catch(err => { U().toast(err.message, 'error'); return lib; }); return paintPanel();
+      }
+    }
+  }
+  function colorCmd(cmd, c) {
+    if (cmd === 'page-color') { remember(cmd); pg().bg = Object.assign({}, pg().bg, { color: c }); changed(cmd); }
+    else if (cmd === 'bd-color') { remember(cmd); S.cards.backdrop = Object.assign({}, S.cards.backdrop, { color: c }); changed(cmd); }
+    else {
+      const f = { 'el-color': 'color', 'el-fill': 'fill', 'el-on': 'on', 'el-line': 'line', 'el-stroke': 'stroke', 'el-ecolor': 'ecolor', 'el-bc': 'bc' }[cmd]; if (!f) return;
+      setSel(x => { x[f] = c; if (f === 'stroke' && !x.sw) x.sw = 2; if (f === 'bc' && !x.bw) x.bw = 4; }, cmd);
+    }
+    if (S.panel === 'background') paintPanel();
+    if (S.popFor) refreshPop();
+  }
+  function onInput(ev) {
+    if (!S) return;
+    const el = ev.target, cmd = el.dataset.cm; if (!cmd) return;
+    const v = el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value;
+    const out = el.nextElementSibling;
+    if (out && out.tagName === 'OUTPUT') out.textContent = ({ 'el-op': x => x + '%', 'anim-delay': x => (+x).toFixed(1) + ' s', 'anim-dur': x => (+x).toFixed(1) + ' s', 'el-lh': x => (+x).toFixed(2), bgtol: x => x + '%', 'el-radius-pct': x => (+x === 50 ? 'Circle' : x + '%'), 'adj-b': x => x + '%', 'adj-c': x => x + '%', 'adj-s': x => x + '%', 'adj-g': x => x + '%' }[cmd] || (x => x))(v);
+    if (el.type === 'color') { if (ev.type === 'input' || ev.type === 'change') colorCmd(cmd, el.value.toLowerCase()); return; }
+    const quiet = { toolbar: false };
+    switch (cmd) {
+      case 'use': if (ev.type === 'change') { S.use = el.checked; S.dirty = true; paintTop(); } return;
+      case 'fontq': if (ev.type === 'input') { S.fontQuery = el.value; S.fontFocus = true; paintPanel(); } return;
+      case 'size-in': if (ev.type === 'change' && v >= 2) setSel(x => { x.size = r1(v); }, 'size', quiet); return;
+      case 'pprop': if (ev.type === 'input') setSel(x => { x[el.dataset.k] = el.value; }, 'pp' + el.dataset.k, quiet); return;
+      case 'el-ls': return setSel(x => { x.ls = v || undefined; }, cmd, quiet);
+      case 'el-lh': return setSel(x => { x.lh = v; }, cmd, quiet);
+      case 'el-op': return setSel(x => { x.op = v >= 100 ? undefined : v / 100; }, cmd, quiet);
+      case 'el-sw': return setSel(x => { x.sw = v || undefined; if (v && !x.stroke) x.stroke = '#4a5232'; }, cmd, quiet);
+      case 'el-bw': return setSel(x => { x.bw = v || undefined; if (v && !x.bc) x.bc = '#ffffff'; }, cmd, quiet);
+      case 'el-radius': case 'el-radius-pct': return setSel(x => { x.radius = v || undefined; }, cmd, quiet);
+      case 'el-shadow': if (ev.type === 'change') setSel(x => { x.shadow = el.checked || undefined; }, cmd, quiet); return;
+      case 'anim-delay': return setSel(x => { x.anim = Object.assign({}, x.anim, { delay: v || undefined }); }, cmd, quiet);
+      case 'anim-dur': return setSel(x => { x.anim = Object.assign({}, x.anim, { dur: v }); }, cmd, quiet);
+      case 'adj-b': case 'adj-c': case 'adj-s': case 'adj-g': case 'adj-bl': return setSel(x => { x.adj = Object.assign({}, x.adj, { [cmd.slice(4)]: v }); }, cmd, quiet);
+      case 'xywh': if (ev.type === 'change') { const k = el.dataset.k; setSel(x => { x[k] = k === 'w' || k === 'h' ? Math.max(4, v) : k === 'rot' ? (v || undefined) : v; }, null, quiet); } return;
+      case 'bgtol': S.bgTol = v; return bgPreview();
+      case 'bgall': if (ev.type === 'change') { S.bgAll = el.checked; bgPreview(); } return;
+      case 'page-fit': if (ev.type === 'change') { remember(); pg().bg.fit = v; changed(); } return;
+      case 'page-radius': remember(cmd); pg().bg = Object.assign({}, pg().bg, { radius: v || undefined }); return changed(cmd, quiet);
+      case 'page-shadow': if (ev.type === 'change') { remember(); pg().bg = Object.assign({}, pg().bg, { shadow: el.checked || undefined }); changed(); } return;
+      case 'page-w': case 'page-h': if (ev.type === 'change') pageSize(cmd === 'page-w' ? v : pg().w, cmd === 'page-h' ? v : pg().h); return;
+      case 'bd-blur': remember(cmd); S.cards.backdrop = Object.assign({}, S.cards.backdrop, { blur: v || undefined }); return changed(cmd, quiet);
+      case 'upload': if (ev.type === 'change') upload(el.files); return;
+    }
+  }
+  function pageSize(w, h) {
+    w = Math.max(200, Math.min(1400, Math.round(w || 420))); h = Math.max(200, Math.min(2400, Math.round(h || 560)));
+    remember(); const p = pg();
+    // Things on the page keep their place relative to the middle.
+    for (const e of p.els) { e.x = r1(e.x + (w - p.w) / 2); e.y = r1(e.y + (h - p.h) / 2); }
+    p.w = w; p.h = h; S.zoomSet = false; fitZoom(); changed(); paintPanel();
+  }
+  function playPage() {
+    const s = S.root.querySelector('.cm-canvas .c-stage'); if (!s) return;
+    S.root.querySelector('[data-region="over"]').style.visibility = 'hidden';
+    s.classList.remove('c-play'); void s.offsetWidth; s.classList.add('c-play');
+    clearTimeout(S.playT); S.playT = setTimeout(() => { if (!S) return; const n = S.root.querySelector('.cm-canvas .c-stage'); if (n) n.classList.remove('c-play'); const o = $('over'); if (o) o.style.visibility = ''; }, 4500);
+  }
+  function duplicate() {
+    const items = sel(); if (!items.length) return;
+    if (items.every(e => e.type === 'part')) return U().toast('Working parts can only be on a page once.');
+    remember(); const copies = items.filter(e => e.type !== 'part').map(e => Object.assign(clone(e), { id: K().newId(), x: e.x + 14, y: e.y + 14, lock: undefined }));
+    pg().els.push(...copies); S.sel = copies.map(c => c.id); changed();
+  }
+  function removeSel() {
+    const items = sel(); if (!items.length) return;
+    const keep = items.filter(required);
+    if (keep.length === items.length) return U().toast(`Guests need the ${K().PART_LABELS[keep[0].kind].toLowerCase()} on this page, so it can’t be deleted. You can move it, resize it or make it see-through.`);
+    remember(); pg().els = pg().els.filter(e => !S.sel.includes(e.id) || required(e)); S.sel = keep.map(e => e.id); changed();
+    if (keep.length) U().toast('Working parts guests need were kept.');
+  }
+  function arrange(k) {
+    const els = pg().els, ids = S.sel; if (!ids.length) return;
+    remember();
+    const picked = els.filter(e => ids.includes(e.id)), rest = els.filter(e => !ids.includes(e.id));
+    if (k === 'front') pg().els = rest.concat(picked);
+    else if (k === 'back') pg().els = picked.concat(rest);
+    else {
+      const d = k === 'forward' ? 1 : -1, arr = els.slice(), idx = arr.map((e, i) => i);
+      for (const i of d > 0 ? idx.reverse() : idx) { const j = i + d; if (ids.includes(arr[i].id) && j >= 0 && j < arr.length && !ids.includes(arr[j].id)) [arr[i], arr[j]] = [arr[j], arr[i]]; }
+      pg().els = arr;
+    }
+    changed();
+  }
+  function alignTo(k) {
+    const p = pg();
+    setSel(e => {
+      const h = boxH(e);
+      if (k === 'left') e.x = 0; if (k === 'right') e.x = r1(p.w - e.w); if (k === 'hcenter') e.x = r1((p.w - e.w) / 2);
+      if (k === 'top') e.y = 0; if (k === 'bottom') e.y = r1(p.h - h); if (k === 'vcenter') e.y = r1((p.h - h) / 2);
+    });
+  }
+  async function upload(files) {
+    if (!files || !files.length || !S.opts.onLibAdd) return;
+    S.uploading = true; paintPanel();
+    const added = [];
+    try {
+      for (const file of files) {
+        if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { U().toast(`${file.name} isn’t a PNG, JPG, WebP or GIF.`, 'error'); continue; }
+        if (file.size > 15e6) { U().toast(`${file.name} is too big. Please use pictures under 15 MB.`, 'error'); continue; }
+        const { blob, w, h } = await P.shrinkImage(file);
+        const src = await P.uploadMedia(blob.type ? blob : new Blob([blob], { type: file.type }));
+        added.push({ src, name: file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 80), w, h });
+      }
+      if (added.length) { S.lib = await S.opts.onLibAdd(added); U().toast(added.length === 1 ? 'Picture added. Click it to put it on the card.' : `${added.length} pictures added.`); }
+    } catch (err) { U().toast(err.message, 'error'); }
+    if (!S) return;
+    S.uploading = false; paintPanel();
+  }
+  function onKey(ev) {
+    if (!S) return;
+    const a = document.activeElement, typing = a && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable);
+    const mod = ev.ctrlKey || ev.metaKey, k = (ev.key || '').toLowerCase();
+    if (document.querySelector('.a-modal-bg')) return;
+    if (S.preview) {
+      if (ev.key === 'Escape') closePreview();
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') S.root.querySelector(`[data-cm="pv"][data-d="${ev.key === 'ArrowRight' ? 1 : -1}"]`).click();
+      return;
+    }
+    if (mod && k === 's') { ev.preventDefault(); return save(); }
+    if (typing) return;
+    if (S.crop) { if (ev.key === 'Enter') finishCrop(true); if (ev.key === 'Escape') finishCrop(false); return; }
+    if (mod && k === 'z') { ev.preventDefault(); return undo(!ev.shiftKey); }
+    if (mod && k === 'y') { ev.preventDefault(); return undo(false); }
+    if (mod && k === 'd') { ev.preventDefault(); return duplicate(); }
+    if (mod && k === 'c') { S.clip = sel().filter(e => e.type !== 'part').map(clone); return; }
+    if (mod && k === 'v' && S.clip && S.clip.length) { ev.preventDefault(); remember(); const c = S.clip.map(e => Object.assign(clone(e), { id: K().newId(), x: e.x + 10, y: e.y + 10 })); pg().els.push(...c); S.sel = c.map(e => e.id); return changed(); }
+    if (mod && k === 'a') { ev.preventDefault(); S.sel = pg().els.filter(e => !e.lock).map(e => e.id); paintOver(); return paintToolbar(); }
+    if (ev.key === 'Escape') { hidePop(); S.sel = []; paintOver(); return paintToolbar(); }
+    if (!S.sel.length) return;
+    if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); return removeSel(); }
+    const st = ev.shiftKey ? 10 : 1, d = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[ev.key];
+    if (d) { ev.preventDefault(); setSel(e => { if (!e.lock) { e.x = r1(e.x + d[0]); e.y = r1(e.y + d[1]); } }, 'nudge', { toolbar: false }); }
+    if (ev.key === 'Enter') { const e = one(); if (e && e.type === 'text') { ev.preventDefault(); startTextEdit(e.id); } }
+  }
+})();
+
 window.__startPixie({
 guest: function () {
 // Guest website: Welcome -> RSVP deadline notice -> Invitation & name search -> Reservation & answers -> Thank you.
@@ -2219,11 +3580,11 @@ guest: function () {
   const calm = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let moving = false;
   function transition(change, dir) {
-    const card = app.querySelector('.g-card, .f-stage');
+    const card = app.querySelector('.g-card, .f-stage, .c-stage');
     const show = () => {
       change();
       window.scrollTo(0, 0);
-      const next = app.querySelector('.g-card, .f-stage');
+      const next = app.querySelector('.g-card, .f-stage, .c-stage');
       if (next && !calm()) next.classList.add('g-enter-' + dir);
       const h = app.querySelector('h1, h2');
       if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
@@ -2372,7 +3733,10 @@ guest: function () {
   // ---------- Fairy Garden design ----------
   // Kindly RSVP -> Hello, what's your name? -> I reserved N seats for you -> Thank you. Guests who aren't the
   // Designated RSVP Representative see a "Surprise! No worries" card instead of the answers.
-  const fairy = () => !!(G.theme && G.theme.rsvpDesign === 'fairy');
+  // Fairy Garden and the studio's own cards (Card Maker) share one guest flow; fairyLook() is the Fairy Garden pictures only.
+  const fairyLook = () => !!(G.theme && G.theme.rsvpDesign === 'fairy');
+  const custom = () => !!(G.theme && G.theme.rsvpDesign === 'custom' && G.theme.cards && G.theme.cards.pages);
+  const fairy = () => fairyLook() || custom();
   const F = P.fairy;
   const invite = () => (G.theme && G.theme.invitationLink) || '';
   const fBack = () => G.history.length && !['thanks', 'surprise'].includes(G.step) ? `<button type="button" class="f-back" data-act="back" aria-label="Go back to the previous screen">${icon('back', 'g-back-ic')}<span>Back</span></button>` : '';
@@ -2401,7 +3765,7 @@ guest: function () {
   };
   // Live edits from the Design tab: restyle the parts in place, so nothing replays.
   function restyleParts() {
-    if (!fairy()) return;
+    if (!fairyLook()) return;
     app.querySelectorAll('[data-part]').forEach(el => {
       const p = partOf(el.dataset.part), st = partStyle(p);
       if (st) el.setAttribute('style', st); else el.removeAttribute('style');
@@ -2522,6 +3886,24 @@ guest: function () {
     },
     error() { return views.error(); },
   };
+  // ---------- the studio's own cards (Card Maker) ----------
+  function cview() {
+    const K = P.cards, cards = G.theme.cards, key = cards.pages[G.step] ? G.step : 'notice', r = G.r || null;
+    const repHere = r && r.repId && r.guests.some(g => g.id === r.repId), isRep = !repHere || (G.who || r.repId) === r.repId;
+    const view = !!(r && (r.submittedAt || !isRep));
+    const ctx = { mode: 'guest', site: G.site, theme: G.theme, r, answers: G.answers, who: G.who, view, closed: G.closed, busy: G.busy, mine: G.mine, justAnswered: G.justAnswered };
+    const bd = K.backdrop(cards), builtIn = bd.src && /^fairy-/.test(bd.src);
+    const back = G.history.length && !['thanks', 'surprise'].includes(G.step) ? `<button type="button" class="c-back" data-act="back" aria-label="Go back to the previous screen">${icon('back', 'g-back-ic')}<span>Back</span></button>` : '';
+    const msgs = [
+      G.error && `<p class="c-msg" role="alert">${esc(G.error)}</p>`,
+      key === 'reservation' && r && r.submittedAt && !view && !G.closed && `<p class="c-msg is-info">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>`,
+      key === 'change' && G.closed && `<p class="c-msg">The RSVP deadline has passed, so answers can no longer be changed here.</p>`,
+      key === 'thanks' && G.previewMode && '<p class="c-msg is-info">Preview only: this answer was not saved.</p>',
+    ].filter(Boolean).join('');
+    return `<div class="c-wrap"><div class="c-backdrop" aria-hidden="true" ${bd.src && !builtIn ? `data-cbg="${esc(bd.src)}"` : ''}
+        style="background-color:${esc(bd.color)};${builtIn ? `background-image:url('${esc(F(bd.src))}');` : ''}${bd.blur ? `filter:blur(${bd.blur}px);` : ''}"></div>
+      ${banner()}${back}${K.page(cards, key, ctx)}${msgs}</div>`;
+  }
   // The handwriting starts once its font is ready, so the pen draws the real letters.
   function startWriting() {
     const svg = app.querySelector('.f-write'); if (!svg) return;
@@ -2561,6 +3943,12 @@ guest: function () {
   function render() {
     // Keep the playing video when only the answers change.
     const hero = app.querySelector('[data-region="hero"] video');
+    if (custom()) {
+      app.innerHTML = cview();
+      document.body.classList.remove('is-fairy');
+      P.loadFonts(P.cards.fonts(G.theme.cards)); P.cards.paint(app);
+      return;
+    }
     const V = fairy() ? fviews : views;
     app.innerHTML = (V[G.step] || V[fairy() ? 'notice' : 'welcome'])();
     document.body.classList.toggle('is-fairy', fairy());
@@ -2588,13 +3976,13 @@ guest: function () {
   // Design tab, Fairy Garden: the card itself is an element you can click and resize from its corner dot.
   const F_SIZE_KEY = { notice: 'fairyRsvpSize', invite: 'fairyNameSize', surprise: 'fairySurpriseSize', reservation: 'fairyResSize', change: 'fairyChangeSize', thanks: 'fairyThanksSize' };
   function paintFairyHandle() {
-    const st = design && fairy() && F_SIZE_KEY[screenKey()] && app.querySelector('.f-stage'); if (!st) return;
+    const st = design && fairyLook() && F_SIZE_KEY[screenKey()] && app.querySelector('.f-stage'); if (!st) return;
     st.classList.add('f-design'); st.classList.toggle('is-sel', D.sel === 'fairy-card');
     if (!st.querySelector(':scope > .f-size-h')) st.insertAdjacentHTML('beforeend', '<span class="f-size-h" data-h="fsize" title="Drag to resize"></span>');
   }
   function paintDecor() {
     paintFairyHandle(); restyleParts(); paintSelBox();
-    const card = app.querySelector(fairy() ? '.f-stage' : '.g-card'), k = screenKey();
+    const card = app.querySelector(fairyLook() ? '.f-stage' : '.g-card'), k = screenKey();
     if (!card) return;
     card.querySelectorAll(':scope > .g-decor').forEach(x => x.remove());
     const list = (G.theme && G.theme.decor && G.theme.decor[k]) || [];
@@ -2677,7 +4065,7 @@ guest: function () {
   if (design) {
     document.body.classList.add('g-designing');
     app.addEventListener('pointerdown', e => {
-      const node = e.target.closest('.g-el'), part = !node && fairy() && e.target.closest('[data-part]'), fst = !node && !part && e.target.closest('.f-stage.f-design');
+      const node = e.target.closest('.g-el'), part = !node && fairyLook() && e.target.closest('[data-part]'), fst = !node && !part && e.target.closest('.f-stage.f-design');
       if (part) {
         const id = part.dataset.part;
         if (D.sel !== 'p:' + id) { select('p:' + id); tell({ type: 'pixie-part-select', id, key: part.dataset.key || '' }); }
@@ -2753,9 +4141,10 @@ guest: function () {
     // The look can arrive before this page has finished loading; keep it and use it once ready.
     if (!G.site) { G.pendingTheme = e.data.theme; return; }
     if (!G.previewMode) return;
-    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || ['fairyRsvpSize', 'fairyNameSize', 'fairySurpriseSize', 'fairyResSize', 'fairyChangeSize', 'fairyThanksSize'].some(k => G.theme[k] !== e.data.theme[k]);
+    const logoChanged = !G.theme || G.theme.logo !== e.data.theme.logo || G.theme.rsvpDesign !== e.data.theme.rsvpDesign || G.theme.invitationLink !== e.data.theme.invitationLink || ['fairyRsvpSize', 'fairyNameSize', 'fairySurpriseSize', 'fairyResSize', 'fairyChangeSize', 'fairyThanksSize'].some(k => G.theme[k] !== e.data.theme[k])
+      || JSON.stringify(G.theme.cards || null) !== JSON.stringify(e.data.theme.cards || null);
     if (G.theme && G.theme.rsvpDesign !== e.data.theme.rsvpDesign) {
-      const map = e.data.theme.rsvpDesign === 'fairy' ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
+      const map = ['fairy', 'custom'].includes(e.data.theme.rsvpDesign) ? { welcome: 'notice' } : { notice: 'welcome', surprise: 'invite' };
       if (map[G.step]) G.step = map[G.step];
     }
     // Design tab: words typed into a selected part come with the look.
@@ -2776,7 +4165,7 @@ guest: function () {
     G.answers = {};
     for (const g of G.r.guests) if (g.status !== 'awaiting') G.answers[g.id] = g.status;
     // Fairy Garden uses on/off switches, so everyone starts as coming until the guest switches them off.
-    if (G.theme && G.theme.rsvpDesign === 'fairy') for (const g of G.r.guests) if (!G.answers[g.id]) G.answers[g.id] = 'attending';
+    if (fairy()) for (const g of G.r.guests) if (!G.answers[g.id]) G.answers[g.id] = 'attending';
   }
 
   // Fairy Garden: the representative answers for everyone (once); anyone else in the group gets the Surprise card.
@@ -2793,7 +4182,7 @@ guest: function () {
     if (act === 'f-mind') { G.mine = null; G.error = ''; return go('change'); }
     if (act === 'f-pick') {
       G.mine = b.dataset.v;
-      app.querySelectorAll('[data-act="f-pick"]').forEach(x => { const on = x.dataset.v === G.mine; x.setAttribute('aria-checked', on); x.querySelector('.f-tog').classList.toggle('is-on', on); });
+      app.querySelectorAll('[data-act="f-pick"]').forEach(x => { const on = x.dataset.v === G.mine; x.setAttribute('aria-checked', on); x.querySelector('.f-tog, .c-tog').classList.toggle('is-on', on); });
       return;
     }
     if (act === 'f-save') {
@@ -2894,7 +4283,7 @@ guest: function () {
       else if (step === 'surprise' && G.token && fairy()) { G.history = []; G.step = 'surprise'; }
       else if (step === 'change' && G.token && fairy()) { G.history = []; G.step = 'change'; }
       render();
-      const first = app.querySelector('.g-card, .f-stage');
+      const first = app.querySelector('.g-card, .f-stage, .c-stage');
       if (!calm() && !design && first) first.classList.add('g-enter-first');
     } catch (err) {
       G.error = err.message; G.site = Object.assign({}, C.DEFAULT_SITE); G.step = 'error'; render();
@@ -3242,7 +4631,7 @@ guest: function () {
     previewTarget: '', previewDevice: 'mobile', version: 0, pending: false,
   };
   const PHASE = { open: ['Collecting RSVPs', ''], closed: ['RSVP closed', 'a-pill-closed'], done: ['Event done', 'a-pill-done'] };
-  const TABS = [['guests', 'Guest List'], ['upload', 'Upload RSVP'], ['links', 'RSVP Links'], ['customize', 'Customize'], ['design', 'Design'], ['wording', 'Wording'], ['preview', 'Preview']];
+  const TABS = [['guests', 'Guest List'], ['upload', 'Upload RSVP'], ['links', 'RSVP Links'], ['customize', 'Customize'], ['cards', 'Card Maker'], ['wording', 'Wording'], ['preview', 'Preview']];
   const bundleNote = () => P.bundle ? '<div class="a-banner a-banner-info"><span><strong>Try-out version.</strong> This file keeps everything in this browser only. Links you copy here only open on this computer, and nothing syncs to clients or guests. Host the full site for real clients.</span></div>' : '';
   const randomCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
@@ -3381,7 +4770,7 @@ guest: function () {
   // ---------- client workspace ----------
   function viewClient() {
     const c = B.client, [label, cls] = PHASE[c.phase];
-    const body = { guests: B.form ? viewForm : viewGuests, upload: viewUpload, links: viewLinks, customize: viewCustomize, design: viewDesign, wording: viewWording, preview: viewPreview }[B.tab]();
+    const body = { guests: B.form ? viewForm : viewGuests, upload: viewUpload, links: viewLinks, customize: viewCustomize, design: viewDesign, cards: viewCards, wording: viewWording, preview: viewPreview }[B.tab]();
     return `<button class="a-back" data-act="go" data-view="tracker">← All clients</button>
       <div class="a-client-head"><div><h1 class="a-script a-client-title">${esc(c.couple)}</h1>
         <p class="a-muted">Event ${esc(C.formatLong(c.weddingDate))} · RSVP by ${esc(C.formatLong(c.deadline))} <span class="a-pill ${cls}">${label}</span></p></div>
@@ -3560,7 +4949,8 @@ guest: function () {
         <section class="a-panel a-stack"><h3 class="a-h3">RSVP design</h3>
           <p class="a-muted a-small">Choose which RSVP pages this client’s guests see.</p>
           <div class="a-designs">${Object.entries(m.rsvpDesigns || { classic: 'Classic Garden', fairy: 'Fairy Garden' }).map(([k, l]) => `<button type="button" class="a-design-tile ${(t.rsvpDesign || 'classic') === k ? 'is-on' : ''}" data-act="rsvp-design" data-d="${k}" aria-pressed="${(t.rsvpDesign || 'classic') === k}">
-            <span class="a-design-thumb" data-d="${k}" style="background-image:url('${esc(k === 'fairy' ? P.fairy('fairy-card-rsvp.webp') : P.bg)}')"></span><span>${esc(l)}</span></button>`).join('')}</div>
+            <span class="a-design-thumb" data-d="${k}" style="background-image:url('${esc(k === 'fairy' ? P.fairy('fairy-card-rsvp.webp') : k === 'custom' ? P.fairy('fairy-tulip.webp') : P.bg)}')"></span><span>${esc(l)}</span></button>`).join('')}</div>
+          ${(t.rsvpDesign || 'classic') === 'custom' ? '<p class="a-muted a-small">“My own cards” are the cards you make in the Card Maker tab.</p>' : ''}
           <label class="a-field"><span>Invitation link (for the “Back to Invitation” buttons)</span><input data-theme="invitationLink" type="url" value="${esc(t.invitationLink || '')}" placeholder="https://… link to the client’s e-invitation" maxlength="500"></label>
           <p class="a-muted a-small">Used in the Fairy Garden design. Leave it empty to hide those buttons.</p>
           <h4 class="a-h4">Fairy Garden card sizes</h4>
@@ -3752,6 +5142,36 @@ guest: function () {
       paintVideoThumb(); fitLookFrame(); return;
     }
     P.setFrame(f, B.previewTarget ? '/r/' + B.previewTarget + '?preview=1&step=reservation' : '/w/' + c.slug + '?preview=1');
+  }
+
+  // ---------- Card Maker: the studio makes this client's own RSVP cards (opens full screen, see cardmaker.js) ----------
+  function viewCards() {
+    const t = B.client.theme, cards = t.cards && t.cards.pages ? t.cards : null, on = t.rsvpDesign === 'custom', K = P.cards;
+    const ctx = w => ({ mode: 'thumb', site: B.client.site, theme: t, r: K.sample(), answers: { g1: 'attending', g2: 'attending', g3: 'not_attending' }, who: 'g1', view: false, width: w + 'px' });
+    const names = { classic: 'Classic Garden', fairy: 'Fairy Garden' };
+    return `<section class="a-panel a-stack b-cards">
+        <div class="b-cards-head"><div><h3 class="a-h3">Card Maker</h3>
+          <p class="a-muted">Make this client’s RSVP cards yourself, like in Canva: fonts, sizes, colors, your elements, shapes, crop, remove background, animations and page transitions. Each of the six pages is one step guests go through.</p></div>
+          <button type="button" class="a-btn" data-act="open-cards">${cards ? 'Open Card Maker' : 'Start making cards'}</button></div>
+        <p class="a-banner ${on ? 'a-banner-info' : ''}"><span>${on ? 'Guests see these cards now.' : cards ? `Guests see the ${esc(names[t.rsvpDesign] || 'Classic Garden')} design. Turn on “Guests see these cards” in the Card Maker to use your cards.` : 'No cards made yet. You can start from your Fairy Garden pictures or a blank cream card.'}</span></p>
+        ${cards ? `<div class="b-cards-pages">${K.PAGES.map(([k, l], i) => { const p = cards.pages[k], w = Math.round(Math.min(150, 190 * p.w / p.h)); return `<button type="button" class="b-cards-page" data-act="open-cards" data-page="${k}"><span class="b-cards-thumb" style="background:${esc(K.backdrop(cards).color)}">${K.page(cards, k, ctx(w))}</span><span>${i + 1}. ${esc(l)}</span></button>`; }).join('')}</div>` : ''}
+      </section>`;
+  }
+  async function openCardMaker(page) {
+    if (!B.studio) await loadStudio();
+    const c = B.client, t = c.theme, lib = () => (B.studio && B.studio.elements) || [];
+    const putLib = async list => { B.studio = (await api('PUT', '/api/board/studio', { elements: list })).studio; return lib(); };
+    P.cardMaker.open({ client: c, cards: t.cards, theme: t, site: c.site, lib: lib(), page,
+      customFontLabel: t.customFont ? B.meta.customFont + ' (' + t.customFont.name + ')' : '',
+      onLibAdd: items => putLib(lib().concat(items.map(x => Object.assign({ id: newId() }, x)))),
+      onLibSet: putLib,
+      onSave: async (cards, use) => {
+        const theme = { cards };
+        if (use) theme.rsvpDesign = 'custom'; else if (B.client.theme.rsvpDesign === 'custom') theme.rsvpDesign = 'fairy';
+        const out = await api('PUT', '/api/board/clients/' + B.client.id + '/theme', { theme });
+        useClient(out.client); resetDrafts(); return true;
+      },
+      onClose: () => render() });
   }
 
   // ---------- Design (Canva-style): place your own elements and text on each guest screen ----------
@@ -4107,6 +5527,7 @@ guest: function () {
     // Studio-wide website edits (words, colors, elements) and the "Edit website" button. Only the studio ever reaches this page.
     if (P.siteStart) P.siteStart({ page: 'board', root: app, canEdit: true, site: B.studio && B.studio.site });
     document.title = (B.view === 'client' && B.client ? B.client.couple + ' · ' : '') + 'Pixie’s RSVP Board';
+    if (B.view === 'client' && B.tab === 'cards' && P.cards) { P.cards.paint(app); if (B.client.theme.cards) P.loadFonts(P.cards.fonts(B.client.theme.cards)); }
     if (withFrame !== false && B.view === 'client' && (B.tab === 'preview' || B.tab === 'customize' || B.tab === 'design')) loadFrame();
     P.motion(app, B.view === 'client' && B.client ? 'client:' + B.client.id + ':' + B.tab : 'tracker');
   }
@@ -4133,7 +5554,7 @@ guest: function () {
     if (tab === B.tab && !B.form) return;
     if (!(await leaveOk())) return;
     if (B.pending) { await loadClient(B.client.id); B.pending = false; }
-    if (tab === 'design' && !B.studio) await loadStudio();
+    if ((tab === 'design' || tab === 'cards') && !B.studio) await loadStudio();
     B.tab = tab; B.dSel = null; B.dUndo = []; B.dRedo = []; resetDrafts(); render(); scrollTo(0, 0);
   }
   async function saveClient(method, sub, body, okMsg) {
@@ -4162,6 +5583,7 @@ guest: function () {
         P.resetStudio(); B.error = ''; await loadAuth(); render(); U.toast('Sign-in reset. Choose your new name and password.');
         return;
       }
+      case 'open-cards': return openCardMaker(b.dataset.page);
       case 'logout': if (!(await leaveOk())) return; await P.api('POST', '/api/board/logout', {}).catch(() => {}); B.list = null; B.view = 'tracker'; resetDrafts(); await loadAuth(); return render();
       case 'go': e.preventDefault(); return goView(b.dataset.view);
       case 'modal-bg': if (e.target === b) return goView('tracker'); return;
