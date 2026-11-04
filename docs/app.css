@@ -1756,12 +1756,15 @@ body.cm-open .a-toast { z-index: 1300; bottom: 128px; }
 }
 @media (prefers-reduced-motion: reduce) { .cm, .cm * { animation: none !important; transition: none !important; } }
 
-.b-cards-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
-.b-cards-head p { margin: 4px 0 0; max-width: 640px; }
-.b-cards-pages { display: flex; flex-wrap: wrap; gap: 14px; }
-.b-cards-page { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--taupe); border-radius: 14px; background: #fff; cursor: pointer; font: inherit; color: inherit; }
-.b-cards-page:hover { border-color: var(--pink); box-shadow: var(--shadow); }
-.b-cards-thumb { display: flex; align-items: center; justify-content: center; width: 160px; height: 200px; border-radius: 10px; overflow: hidden; pointer-events: none; }
+.b-cards { margin-top: 6px; padding: 14px; border: 1px solid var(--taupe); border-radius: 16px; background: #fff; transition: border-color .2s, box-shadow .2s; }
+.b-cards.is-on { border-color: var(--rasp); box-shadow: 0 0 0 3px var(--pink-soft); }
+.b-cards-head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.b-cards-head .a-h4 { margin: 0; }
+.b-cards-head p { margin: 4px 0 0; max-width: 360px; }
+.b-cards-pages { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.b-cards-page { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border: 1px solid var(--taupe); border-radius: 12px; background: var(--paper); cursor: pointer; font: inherit; font-size: 11.5px; color: inherit; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.b-cards-page:hover { border-color: var(--pink); box-shadow: var(--shadow); transform: translateY(-2px); }
+.b-cards-thumb { display: flex; align-items: center; justify-content: center; width: 84px; height: 104px; border-radius: 8px; overflow: hidden; pointer-events: none; }
 span.c-input { display: flex; align-items: center; justify-content: center; }
 /* Pictures, words and shapes never catch taps meant for the buttons under them. */
 .c-page:not(.c-edit) .c-el:not(.c-t-part) { pointer-events: none; }
