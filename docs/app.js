@@ -68,7 +68,7 @@
     fairyReserved: 'I Reserved',
     fairySeatsWord: 'Seats',
     fairyForYou: 'For You!',
-    fairyCount: 'Can you help me count who’s coming? Hehe! Kindly confirm who’s joining from your family or group! ♡',
+    fairyCount: 'Can you help me count who’s coming? Hehe! Kindly confirm who’s joining from your family or group!',
     fairyCheck: 'Did I count everyone right?',
     fairySubmit: 'SUBMIT',
     fairyThanks: 'Thank You!',
@@ -1260,7 +1260,7 @@
     'Quicksand': 'wght@400;600', 'Libre Caslon Display': '', 'DM Serif Display': 'ital@0;1', 'Gloock': '', 'Prata': '', 'Gilda Display': '', 'Marcellus': '', 'Forum': '',
     'Della Respira': '', 'Bellefair': '', 'Italiana': '', 'Tenor Sans': '', 'Great Vibes': '', 'Parisienne': '', 'Pinyon Script': '', 'Alex Brush': '', 'Allura': '',
     'Tangerine': 'wght@400;700', 'Italianno': '', 'Monsieur La Doulaise': '', 'Petit Formal Script': '', 'Mrs Saint Delafield': '', 'Rouge Script': '', 'Imperial Script': '',
-    'Poppins': 'wght@400;500;600;700', 'Homemade Apple': '', 'Cedarville Cursive': '', 'Fuzzy Bubbles': 'wght@400;700', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
+    'Poppins': 'wght@400;500;600;700', 'Homemade Apple': '', 'Cedarville Cursive': '', 'Fuzzy Bubbles': 'wght@400;700', 'Thasadith': 'wght@400;700', 'La Belle Aurore': '', 'Ballet': '', 'WindSong': '', 'Corinthia': '', 'Luxurious Script': '', 'Herr Von Muellerhoff': '',
   };
   P.FONT_FAMILIES = Object.keys(AXES);
   // The studio's own uploaded font is registered under this name.
@@ -3826,14 +3826,14 @@ guest: function () {
       const rows = r.guests.map(g => {
         const on = G.answers[g.id] === 'attending';
         return `<li class="f-row ${g.id === G.justAnswered ? 'is-just' : ''}">
-          <span class="f-row-name">${g.id === me ? '<span class="f-you">You</span>' : ''}${esc(g.name)}</span>
+          <span class="f-row-name">${esc(g.name)}</span>
           <button type="button" class="f-switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(g.name)} is coming" data-act="f-toggle" data-g="${g.id}" ${G.closed || view ? 'disabled' : ''}><i></i></button></li>`;
       }).join('');
       const recap = (arr, yes) => arr.map(g => `<li class="${yes ? 'yes' : 'no'}${g.id === G.justAnswered ? ' is-new' : ''}"><span>${yes ? '✓' : '✕'}</span><span class="f-recap-name">${esc(g.name)}</span><span class="f-recap-st">${yes ? esc(C.fill(G.site.attendingLabel, G.site)) : esc(C.fill(G.site.notAttendingLabel, G.site))}</span></li>`).join('');
       const note = G.closed ? `<p class="f-note">The RSVP deadline (${esc(C.formatDeadline(G.site.deadline))}) has passed, so answers can no longer be changed here.</p>`
         : r.submittedAt && !view ? `<p class="f-note">You already sent your RSVP. You can change it until ${esc(C.formatDeadline(G.site.deadline))}.</p>` : '';
       return fPage(`<main class="f-stage f-res" style="${fSize('fairyResSize')}">
-          <div class="f-res-body" style="${['l1', 'l2', 'l3', 'r1', 'r2', 'r3'].map(k => `--${k}:url('${esc(F('fairy-res-' + k + (k[1] === '2' ? '.png' : '.webp')))}')`).join(';')}">
+          <div class="f-res-body" style="--rt:url('${esc(F('fairy-res2-top.webp'))}');--rm:url('${esc(F('fairy-res2-mid.png'))}');--rb:url('${esc(F('fairy-res2-bot.webp'))}')">
             <div class="f-res-in">
               <p class="f-hand f-reserved" ${fp('reserved', 'fairyReserved')}>${rich('fairyReserved', r)}</p>
               <p class="f-script f-num" ${fp('num')}>${r.seats}</p>
@@ -3952,7 +3952,7 @@ guest: function () {
     const V = fairy() ? fviews : views;
     app.innerHTML = (V[G.step] || V[fairy() ? 'notice' : 'welcome'])();
     document.body.classList.toggle('is-fairy', fairy());
-    if (fairy()) { P.loadFonts(['Homemade Apple', 'Cedarville Cursive', 'Fuzzy Bubbles', 'Gilda Display']); startWriting(); }
+    if (fairy()) { P.loadFonts(['Homemade Apple', 'Cedarville Cursive', 'Fuzzy Bubbles', 'Gilda Display', 'Thasadith', 'La Belle Aurore']); startWriting(); }
     if (G.theme) P.paintBackground(app.querySelector('.g-bg'), G.theme);
     const spot = app.querySelector('[data-region="hero"]');
     if (hero && spot && G.theme && hero.dataset.ref === G.theme.video) { spot.prepend(hero); hero.play().catch(() => {}); }
